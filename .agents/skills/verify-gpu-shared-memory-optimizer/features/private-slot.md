@@ -1,5 +1,7 @@
 # Thread-private shared-slot promotion
 
+The larger frozen comparison is driven by `tools/benchmark.ps1 Prepare`, `Smoke`, and `Measure`, alongside the stencil sweep. See `stencil-tile.md` for timing and resource scopes. Smoke disables timing.
+
 ## Sub-features
 
 For an exactly 128-thread NVPTX kernel, replace one `[128 x i32]` address-space-3 store/load pair indexed by the same `tid.x`-derived value with its stored SSA value. The pass requires a single basic block and a nonvolatile, nonatomic store-before-load pair; it preserves allowed CTA barriers.

@@ -1,6 +1,8 @@
 #include <cuda.h>
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -83,15 +85,24 @@ std::vector<int> runCase(CUfunction Kernel, CUdeviceptr DeviceBase,
 } // namespace
 
 int main(int Argc, char **Argv) {
-  if (Argc != 4 || (std::string(Argv[3]) != "copy" &&
+  const bool Benchmark = Argc == 5 && std::string(Argv[4]) == "--benchmark";
+  const bool Smoke = Argc == 5 && std::string(Argv[4]) == "--smoke";
+  if ((Argc != 4 && !Benchmark && !Smoke) || (std::string(Argv[3]) != "copy" &&
                     std::string(Argv[3]) != "stencil")) {
-    std::cerr << "usage: cuda-runner <original.ptx> <promoted.ptx> <copy|stencil>\n";
+    std::cerr << "usage: cuda-runner <original.ptx> <promoted.ptx> <copy|stencil> [--benchmark|--smoke]\n";
     return 2;
   }
   try {
     check(cuInit(0), "initialize CUDA");
     Context Ctx;
     check(cuDeviceGet(&Ctx.Device, 0), "select CUDA device");
+    char DeviceName[256];
+    check(cuDeviceGetName(DeviceName, sizeof(DeviceName), Ctx.Device), "read device name");
+    int DriverVersion = 0, Multiprocessors = 0, MaxThreads = 0;
+    check(cuDriverGetVersion(&DriverVersion), "read driver version");
+    check(cuDeviceGetAttribute(&Multiprocessors, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, Ctx.Device), "read SM count");
+    check(cuDeviceGetAttribute(&MaxThreads, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, Ctx.Device), "read SM thread limit");
+    std::cout << "device=" << DeviceName << " driver=" << DriverVersion << " sms=" << Multiprocessors << '\n';
     CUcontext Primary;
     check(cuDevicePrimaryCtxRetain(&Primary, Ctx.Device),
           "get primary context handle");
@@ -112,7 +123,8 @@ int main(int Argc, char **Argv) {
     check(cuModuleGetFunction(&PromotedKernel, Promoted.Value, KernelName),
           "find promoted kernel");
 
-    for (unsigned Blocks : {1u, 3u, 17u}) {
+    const std::vector<unsigned> Sizes = Benchmark ? std::vector<unsigned>{128, 4096, 32768, 131072} : std::vector<unsigned>{1, 3, 17};
+    for (unsigned Blocks : Sizes) {
       const unsigned Count = Blocks * 128;
       std::vector<int> Input(Count + (Stencil ? 2 : 0));
       for (size_t I = 0; I < Input.size(); ++I)
@@ -130,6 +142,7 @@ int main(int Argc, char **Argv) {
       check(cuMemAlloc(&DOut.Value, Count * sizeof(int)),
             "allocate output");
       CUdeviceptr KernelInput = DIn.Value + (Stencil ? sizeof(int) : 0);
+      std::cout << "allocation_bytes=" << (Input.size() + Count) * sizeof(int) << '\n';
 
       auto OriginalResult = runCase(OriginalKernel, DIn.Value, KernelInput, DOut.Value,
                                     Input, Count, Blocks);
@@ -140,23 +153,48 @@ int main(int Argc, char **Argv) {
       if (OriginalResult != Expected || PromotedResult != Expected ||
           OriginalResult != PromotedResult)
         throw std::runtime_error("GPU output differs from independent CPU oracle");
+      if (Smoke) {
+        std::cout << "mode=" << Argv[3] << " elements=" << Count << " oracle=PASS timing=disabled\n";
+        continue;
+      }
 
       // Warm both variants, then alternate batches to limit drift bias.
       (void)runCase(OriginalKernel, DIn.Value, KernelInput, DOut.Value, Input, Count, Blocks);
       (void)runCase(PromotedKernel, DIn.Value, KernelInput, DOut.Value, Input, Count, Blocks);
-      float OriginalMs = 0, PromotedMs = 0;
-      for (unsigned Round = 0; Round < 5; ++Round) {
-        if (Round % 2 == 0) {
-          OriginalMs += measure(OriginalKernel, KernelInput, DOut.Value, Blocks);
-          PromotedMs += measure(PromotedKernel, KernelInput, DOut.Value, Blocks);
-        } else {
-          PromotedMs += measure(PromotedKernel, KernelInput, DOut.Value, Blocks);
-          OriginalMs += measure(OriginalKernel, KernelInput, DOut.Value, Blocks);
+      for (auto Entry : {std::make_pair("original", OriginalKernel), std::make_pair("promoted", PromotedKernel)}) {
+        int ActiveBlocks = 0, Registers = 0, SharedBytes = 0;
+        check(cuOccupancyMaxActiveBlocksPerMultiprocessor(&ActiveBlocks, Entry.second, 128, 0), "read theoretical occupancy");
+        check(cuFuncGetAttribute(&Registers, CU_FUNC_ATTRIBUTE_NUM_REGS, Entry.second), "read registers");
+        check(cuFuncGetAttribute(&SharedBytes, CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, Entry.second), "read static shared memory");
+        std::cout << "resources side=" << Entry.first << " registers_per_thread=" << Registers << " shared_bytes_per_cta=" << SharedBytes
+                  << " theoretical_occupancy=" << double(ActiveBlocks * 128) / MaxThreads << '\n';
+      }
+      std::vector<float> Samples[2];
+      for (unsigned Round = 0; Round < 7; ++Round) {
+        for (unsigned Position = 0; Position < 2; ++Position) {
+          unsigned Side = (Round + Position) % 2;
+          CUfunction Kernel = Side ? PromotedKernel : OriginalKernel;
+          check(cuMemsetD32(DOut.Value, 0xdeadbeef, Count), "poison timed output");
+          auto StartWall = std::chrono::steady_clock::now();
+          float Ms = measure(Kernel, KernelInput, DOut.Value, Blocks);
+          double WallUs = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - StartWall).count() / 64;
+          std::vector<int> Actual(Count);
+          check(cuMemcpyDtoH(Actual.data(), DOut.Value, Count * sizeof(int)), "read timed output");
+          if (Actual != Expected) throw std::runtime_error("timed output differs from independent CPU oracle");
+          Samples[Side].push_back(Ms * 1000);
+          std::cout << "sample mode=" << Argv[3] << " blocks=" << Blocks << " elements=" << Count << " repeat=" << Round
+                    << " side=" << (Side ? "promoted" : "original") << " event_us=" << Ms * 1000 << " host_batch_us_per_call=" << WallUs
+                    << " logical_effective_GBps=" << (double(Count) * 2 * sizeof(int)) / (Ms * 1e6)
+                    << " finished=64 failed=0 oracle=PASS\n";
         }
       }
-      std::cout << "mode=" << Argv[3] << " blocks=" << Blocks << " elements=" << Count
-                << " oracle=PASS original_us=" << (OriginalMs * 200.0f)
-                << " promoted_us=" << (PromotedMs * 200.0f) << '\n';
+      for (unsigned Side = 0; Side < 2; ++Side) {
+        auto Values = Samples[Side];
+        std::sort(Values.begin(), Values.end());
+        std::cout << "summary mode=" << Argv[3] << " elements=" << Count << " side=" << (Side ? "promoted" : "original")
+                  << " repeats=7 median_us=" << Values[3] << " min_us=" << Values.front() << " max_us=" << Values.back()
+                  << " p95_us=" << Values[6] << " bandwidth_scope=logical_input_plus_output_not_measured_DRAM\n";
+      }
     }
   } catch (const std::exception &E) {
     std::cerr << "cuda-runner: " << E.what() << '\n';

@@ -62,9 +62,10 @@ switch ($Phase) {
         if ($LASTEXITCODE -ne 0) { throw 'Stencil shared-cache pass compilation failed.' }
         & cl.exe /nologo "/Fe$gpuExe" $gpuMainObj $slotObj $stencilObj /link "/LIBPATH:$llvm\lib" "/LIBPATH:$deps\zlib\lib" "/LIBPATH:$deps\zstd\lib" $libs 'zs.lib' 'zstd_static.lib' $systemLibs 'bcrypt.lib'
         if ($LASTEXITCODE -ne 0) { throw 'Shared-memory optimizer link failed.' }
-        & "$cuda\bin\nvcc.exe" --std=c++17 (Join-Path $repo 'tools\CudaRunner.cpp') "$cuda\lib\x64\cuda.lib" -o $runner
+        & "$cuda\bin\nvcc.exe" --std=c++17 -O2 (Join-Path $repo 'tools\CudaRunner.cpp') "$cuda\lib\x64\cuda.lib" -o $runner
         if ($LASTEXITCODE -ne 0) { throw 'CUDA Driver API runner compilation failed.' }
         if (-not (Test-Path -LiteralPath $gpuExe) -or -not (Test-Path -LiteralPath $runner)) { throw 'GPU executables were not produced.' }
+        'CUDA host runner: nvcc --std=c++17 -O2; device kernels separately lowered by llc -O3' | Set-Content (Join-Path $bin 'cuda-runner-build.txt')
         Write-Output "Built $exe, $gpuExe, and $runner"
     }
     'Doctor' {
@@ -125,6 +126,9 @@ switch ($Phase) {
             $optimizedText -notmatch 'st\.shared\.b32' -or
             $optimizedText -notmatch 'bar\.sync') {
             throw "Unexpected PTX memory mapping: original global=$originalGlobalLoads optimized global=$optimizedGlobalLoads"
+        }
+        if (([regex]::Matches($optimizedText, 'ld\.shared\.b32')).Count -ne 2) {
+            throw 'Stencil must reuse its center SSA value and load only two shared neighbors.'
         }
         $negativeInput = Join-Path $repo 'test\Inputs\P20CrossThreadSlot.ll'
         $negativeOutput = Join-Path $runDir 'negative.optimized.ll'

@@ -253,14 +253,11 @@ PreservedAnalyses StencilSharedCachePass::run(Module &M,
     B.CreateCall(BarrierFn, {B.getInt32(0)});
     Value *LeftSlot = B.CreateInBoundsGEP(TileTy, Tile,
         {B.getInt64(0), Lane64});
-    Value *MiddleSlot = B.CreateInBoundsGEP(TileTy, Tile,
-        {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(1))});
     Value *RightSlot = B.CreateInBoundsGEP(TileTy, Tile,
         {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(2))});
     Value *LV = B.CreateLoad(I32, LeftSlot, "cached.left");
-    Value *MV = B.CreateLoad(I32, MiddleSlot, "cached.center");
     Value *RV = B.CreateLoad(I32, RightSlot, "cached.right");
-    Value *Sum = B.CreateAdd(B.CreateAdd(LV, MV), RV, "stencil.sum");
+    Value *Sum = B.CreateAdd(B.CreateAdd(LV, Center), RV, "stencil.sum");
     B.CreateStore(Sum, B.CreateInBoundsGEP(I32, Output, Base64));
     B.CreateRetVoid();
     errs() << "p20-stencil-cache: cached a 128-lane stencil tile in "
