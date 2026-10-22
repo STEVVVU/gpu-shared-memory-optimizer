@@ -22,6 +22,8 @@ This builds the LLVM IR CLI and CUDA Driver API runner, verifies original and tr
 
 The [P20 CPU-only CI workflow](.github/workflows/p20-cpu-llvm23.yml) installs a pinned LLVM 23.1.4 package from the [official apt.llvm.org repository](https://apt.llvm.org/), builds the optimizer, verifies the IR transformations and generates NVPTX. It does not run a GPU and provides no GPU-execution or performance claim.
 
+The Linux build, IR checks, unsupported byte-GEP cases and NVPTX lowering passed in [run 39716593312](https://github.com/STEVVVU/gpu-shared-memory-optimizer/actions/runs/39716593312). GPU execution was checked separately on the local RTX 5080 Laptop GPU.
+
 ## Contracts and evidence
 
 The stencil caller must provide a positive output length divisible by 128, an input pointer to the first interior `i32` with one valid halo element on either side, a separate `noalias` output allocation, and indices within unsigned `i32` range. The pass does not add bounds checks or create a host launcher. Full scope, source provenance, verification results, and limitations are documented in the [P20 implementation record](reports/P20-implementation.md).

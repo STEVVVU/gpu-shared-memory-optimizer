@@ -64,6 +64,8 @@ The first published CPU-only workflow run [39715288737](https://github.com/STEVV
 
 ## Limits and remaining work
 
+The corrected CPU workflow passed at `32bccb1a455f97c9fa860a206aa61cdc5aa84aa8` in [run 39716593312](https://github.com/STEVVVU/gpu-shared-memory-optimizer/actions/runs/39716593312). Main inspected its actual logs: both transformations applied, three unsupported shapes were rejected, LLVM IR verification and NVPTX generation passed. This hosted run used no GPU. The fresh main-owned local GPU verification remains `run-20261021-220403226` with retained CPU-oracle results and cleanup proof.
+
 This implementation supports only the explicit fixtures and structural contracts above. It does not cover loop discovery, arbitrary dynamic dimensions, nonpadded edges, other dtypes, more general affine stencils, divergent source control flow, or broad alias analysis. The supplied kernel contracts are required preconditions, not runtime-checked properties. Hosted GPU CI is not configured; the real GPU evidence is local to this RTX 5080. The full inherited upstream tutorial build remains unverified/failing for its plugin DLL linkage on this static Windows LLVM SDK, although the retained upstream CLI targets and new P20 target compile as described.
 
 ## Main-agent repeat verification
