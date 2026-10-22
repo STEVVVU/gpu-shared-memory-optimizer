@@ -1,0 +1,61 @@
+{
+  "evidence_run": "run-20261021-220403226",
+  "captured_at_utc": "2026-10-22",
+  "machine": {
+    "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "llvm": "23.1.4",
+    "cuda_toolkit": "13.0.88",
+    "ptx_target": "sm_120"
+  },
+  "method": "Original and transformed PTX executed with the CUDA Driver API runner. Outputs were compared bit-for-bit with independent CPU oracles. Timings are local observations in microseconds per launch; no speedup is claimed.",
+  "results": [
+    {
+      "kernel": "stencil",
+      "ctas": 1,
+      "elements": 128,
+      "oracle": "PASS",
+      "original_us": 6.1948,
+      "transformed_us": 6.1235
+    },
+    {
+      "kernel": "stencil",
+      "ctas": 3,
+      "elements": 384,
+      "oracle": "PASS",
+      "original_us": 6.5881,
+      "transformed_us": 6.4599
+    },
+    {
+      "kernel": "stencil",
+      "ctas": 17,
+      "elements": 2176,
+      "oracle": "PASS",
+      "original_us": 6.3282,
+      "transformed_us": 6.42
+    },
+    {
+      "kernel": "private-slot",
+      "ctas": 1,
+      "elements": 128,
+      "oracle": "PASS",
+      "original_us": 10.8267,
+      "transformed_us": 10.7617
+    },
+    {
+      "kernel": "private-slot",
+      "ctas": 3,
+      "elements": 384,
+      "oracle": "PASS",
+      "original_us": 10.6508,
+      "transformed_us": 10.1848
+    },
+    {
+      "kernel": "private-slot",
+      "ctas": 17,
+      "elements": 2176,
+      "oracle": "PASS",
+      "original_us": 9.9559,
+      "transformed_us": 9.9106
+    }
+  ]
+}

@@ -21,3 +21,15 @@ else()
     LLVMCore LLVMPasses LLVMIRReader LLVMSupport
   )
 endif()
+
+set(shared_memory_optimizer_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/SharedMemoryMain.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../lib/PrivateSharedSlotPromotion.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../lib/StencilSharedCache.cpp"
+)
+
+add_executable(shared-memory-opt ${shared_memory_optimizer_SOURCES})
+target_include_directories(shared-memory-opt PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+target_link_libraries(shared-memory-opt
+  LLVMCore LLVMAnalysis LLVMPasses LLVMIRReader LLVMSupport)
