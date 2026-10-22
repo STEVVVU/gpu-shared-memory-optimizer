@@ -58,6 +58,10 @@ Interleaved five-round CUDA-event means, each round timing 64 launches after war
 
 These are local observations from one run, not general speedup claims. This run shows parity or a small slowdown; synchronization, branch overhead, and retained barriers dominate the tiny kernels. Timing variation is expected at this scale.
 
+## CPU CI bring-up note
+
+The first published CPU-only workflow run [39715288737](https://github.com/STEVVVU/gpu-shared-memory-optimizer/actions/runs/39715288737) added the official apt repository, found the pinned package versions, and installed the LLVM packages successfully. It then failed in the same install step, before compilation. The job log shows the final check was `/usr/lib/llvm-23/bin/llc --version | grep -Fq NVPTX`. Version-matched local LLVM 23.1.4 `llc --version` output registers the target IDs as lowercase `nvptx` and `nvptx64`, and contains no uppercase `NVPTX`, confirming that this case-sensitive check does not match the reported target list. The captured output is about 1 KB locally, so pipe-buffer `SIGPIPE` is not indicated by that evidence, though the log cannot rule out an early-close pipe interaction; the workflow now avoids the pipe entirely by saving the output to a file and checking the registered `nvptx64` identifier case-insensitively. The first run did not reach the compile, IR, or PTX checks. A rerun is needed to validate the remainder of the Linux job.
+
 ## Limits and remaining work
 
 This implementation supports only the explicit fixtures and structural contracts above. It does not cover loop discovery, arbitrary dynamic dimensions, nonpadded edges, other dtypes, more general affine stencils, divergent source control flow, or broad alias analysis. The supplied kernel contracts are required preconditions, not runtime-checked properties. Hosted GPU CI is not configured; the real GPU evidence is local to this RTX 5080. The full inherited upstream tutorial build remains unverified/failing for its plugin DLL linkage on this static Windows LLVM SDK, although the retained upstream CLI targets and new P20 target compile as described.

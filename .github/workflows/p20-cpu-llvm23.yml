@@ -47,7 +47,8 @@ jobs:
             "llvm-23=$version" \
             g++
           test "$(/usr/lib/llvm-23/bin/llvm-config --version)" = 23.1.4
-          /usr/lib/llvm-23/bin/llc --version | grep -Fq NVPTX
+          /usr/lib/llvm-23/bin/llc --version > "$RUNNER_TEMP/llvm-23-llc-version.txt"
+          grep -Eiq '^[[:space:]]*nvptx64[[:space:]]+-' "$RUNNER_TEMP/llvm-23-llc-version.txt"
 
       - name: Build shared-memory optimizer with llvm-config
         shell: bash
