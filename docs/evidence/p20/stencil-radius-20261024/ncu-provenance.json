@@ -1,0 +1,7 @@
+{
+  "version": "2025.3.1.4",
+  "isolation": "Archive extraction only; no system or driver install and no global PATH change",
+  "ncu": "ncu.exe (extracted archive; local path omitted)",
+  "source": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.0.1.json",
+  "archive_sha256": "0ad1c310f38cdfc17e85f6efa2da60e7628bd2db81eba8ec487ab6d49c1bcdef"
+}

@@ -1,0 +1,8 @@
+{
+  "version": "2025.4.1.2",
+  "archive_sha256": "cb26a33427f34606b063166538f00f8eced3e0bc1c5bc21c1385d0e270ceefab",
+  "ncu": "C:\\Users\\steve\\.codex\\tools\\coursework-nsight-2025.4.1.2\\extracted\\nsight_compute-windows-x86_64-2025.4.1.2-archive\\nsight-compute\\2025.4.1\\target\\windows-desktop-win7-x64\\ncu.exe",
+  "query_exit": 1,
+  "isolation": "Archive extraction only; no system or driver install or global PATH change",
+  "source": "https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.1.1.json"
+}

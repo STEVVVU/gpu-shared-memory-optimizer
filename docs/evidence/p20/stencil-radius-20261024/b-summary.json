@@ -1,0 +1,1223 @@
+{
+  "scope": "resident CUDA-event batches and separate warm application transactions, microseconds",
+  "event_scope": "64 reused-array launches/sample; excludes allocation/transfers/readback; may include host submission gaps",
+  "transaction_scope": "warm context and module; allocate+H2D+poison+one launch+sync+D2H+free; CPU oracle outside timer",
+  "campaign_window": "main-owned GPU slot; P14 model exited before Doctor; no concurrent owned GPU jobs; normal desktop GPU clients remain",
+  "limiter": "unestablished; requires separate profiling evidence before an overall performance conclusion",
+  "manifest": {
+    "repeats": 7,
+    "hashes": {
+      "evidence\\benchmark-stencil-radius-20261024-b\\source-sha.txt": "F19B5D70B5FFFB8ECB8C45CE5F8FE5E9537E7D0A1310C67F43274E49F4A66B4A",
+      "build\\bin\\shared-memory-opt.exe": "9A0C6279BEA3C59EFC5CBB09481F5A2D4E8D87A62E3668FA451F5B310F132481",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R8.optimized.ll": "CD461A213C269193A9B5D6B591A2DA07F68F17A47EBEE7A067B42B4F01F7F43C",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R8.optimized.ptx": "30E166DF3F3F1E2C1AE9C7C5759394227EE72F73EFD925EE20AB35B0BD7F10E3",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R16.optimized.ll": "D6EF482236844629102E89FD35EEB796383057912B223BCCDCF6B4A0E6AF054E",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R4.original.ll": "50A441519BCA6757ABB216EC40BCA59F594E6959338431563F0E95861551190B",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R16.original.ptx": "9600B4A8C09207680B1F92B4BCCCD1F9C64D543A8CC401F5A208905DEAFCF86C",
+      "lib\\StencilSharedCache.cpp": "067377072E9576E1C37FA7CB49EF4C8AA4E98AB18859BA3A7E0E64412AC350CC",
+      "build\\bin\\cuda-runner.exe": "A5E2836645C2C93F6CA625342F576CA75270928B2DADB7853D5F93000A4E3B3B",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R8.original.ll": "6654FD1F2AD84E325E58E8ECF271FAE0396FD2DAE9A22DBD351D24DB3A60BBBA",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R4.optimizer.log": "B11C0E4DBE161814E58B411FAE6B654516D5A90A2A276E42A949C813DB0E8E3D",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R1.optimized.ll": "79F87ABE47E34F21057B1209303964C71CE9B2CF3BCA0931D672E5BFE09936F9",
+      "tools\\verify.ps1": "A4AF1FA87C12D0D1576FFEBFACA874AC2AF7625FE1A6775718C4718214A84AB5",
+      "tools\\summarize-stencils.py": "E7DC646F49934A3C843D7C117AA873F87B2AEEC3746515BC15468AF18BD74748",
+      "tools\\CudaRunner.cpp": "14B96ECFA8D931AC8B0974F8A3ECA1325AC10CDCC2189A80B7FECBCC86FE1E2C",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R8.original.ptx": "5055949886CE94796C15E821DDCB6441BE99B8AC8B920758DFCECE9AC3AC47D4",
+      "evidence\\benchmark-stencil-radius-20261024-b\\source.patch": "EE8C9DD7C3C742306692B9A934FF2F0F5CB9AFE4F1224D61C8CD44FA98D3A8B0",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R4.optimized.ll": "4546FB048F76CD2EBEC4AF962622454CB189596806D3DA8511907A75AEA7B6F3",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R1.original.ptx": "CF545EA5246F210BA155DED92A324C0DE35B355DA983C90D575B9677C2418C13",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R16.original.ll": "7174D268314DDBF1BCA6B61BDD12EEA509155F1B276FE1C9D372F0417E33A1E4",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R1.optimized.ptx": "7C6D6385810194FDB3C629B505D1549B03BCB92BE3C74495F142BD6CBFEE6FFB",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R4.original.ptx": "53C1F68FBC0D4569F27741C23A1FAC2265ADE159265F8ED360F3700F09002C73",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R8.optimizer.log": "6760BB8B960B340B09704ADC9B7F1C3A6C5719428C0EEF1468C075DAB50BECF2",
+      "evidence\\benchmark-stencil-radius-20261024-b\\host-build.txt": "571B98F0B0C9846F5FB734BAAB36B37B7982CB655FB4D814E74F03861B26A1A6",
+      "tools\\check-stencil.py": "56677368EBCD700AA2F85C78539E6392E2B7D305C31F98ED3BE7B559481BC760",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R4.optimized.ptx": "C1765E3397A3222FA522E6C4EA131E6F67F91E122A7F6B0880C7559AB6F0E3C6",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R16.optimizer.log": "29D2CD29D04CECF4576835B1FB4C316B9ACD8DC4FF6CC5BE0A3F18418F811808",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R16.optimized.ptx": "AECBA3614B2614F8DD6B95B942CB2ECCF3854CD6419F5B162A30D79CB9A03FBE",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R1.original.ll": "A52BAB4EA68B24F5BF4005817D2E003E1D799A1B121A01710686C1AD445B18AB",
+      "tools\\benchmark-stencils.ps1": "34546192A4B8757047EED518D92EF0EC15508268621905B4315D56B21D12AF68",
+      "evidence\\benchmark-stencil-radius-20261024-b\\R1.optimizer.log": "EA15350601E7BE0CD928892D6E12D8B5742FE3EDB2220416B0344EF72F879691"
+    },
+    "transaction": "warm context and module; allocate+H2D+poison+one launch+sync+D2H+free; CPU oracle outside timer",
+    "scope": "fixed radius 1/4/8/16, LLVM llc -O3 sm_120, nvcc -O2 host; independent uint32 oracle",
+    "launches_per_event_sample": 64,
+    "elements": [
+      16384,
+      524288,
+      4194304,
+      16777216
+    ]
+  },
+  "raw_sha256": {
+    "evidence\\benchmark-stencil-radius-20261024-b\\manifest.json": "1d3902bd179273fdde1edbed7080a39245d334f84360a0837ac10453b98cd413",
+    "evidence\\benchmark-stencil-radius-20261024-b\\R1.Measure.log": "b1753b7b87f230d5870c4cf9ac4a15ee7e52eea77d882c00ccaf7245b068f83b",
+    "evidence\\benchmark-stencil-radius-20261024-b\\R4.Measure.log": "51845586d53ff99e01408298179006379e872f8394eee985f5e25d7e747eae6e",
+    "evidence\\benchmark-stencil-radius-20261024-b\\R8.Measure.log": "204646d42404de18f1b05f0a92eb0e98956497140424279d0e66e4101e1dc2bb",
+    "evidence\\benchmark-stencil-radius-20261024-b\\R16.Measure.log": "36a62655805e175a98c51b90a6ba345647864ee1f26575b1591f002f0fabdaf2"
+  },
+  "measurements": {
+    "sample": {
+      "stencil/16384/original": {
+        "samples_us": [
+          7.7075,
+          5.5535,
+          6.4435,
+          6.121,
+          8.71,
+          5.608,
+          5.441
+        ],
+        "median_us": 6.121,
+        "range_us": [
+          5.441,
+          8.71
+        ]
+      },
+      "stencil/16384/promoted": {
+        "samples_us": [
+          6.0415,
+          6.387,
+          5.1605,
+          6.505,
+          5.55,
+          5.941,
+          6.0855
+        ],
+        "median_us": 6.0415,
+        "range_us": [
+          5.1605,
+          6.505
+        ]
+      },
+      "stencil/524288/original": {
+        "samples_us": [
+          7.7665,
+          7.3125,
+          7.7615,
+          8.1445,
+          8.368,
+          7.44,
+          7.4875
+        ],
+        "median_us": 7.7615,
+        "range_us": [
+          7.3125,
+          8.368
+        ]
+      },
+      "stencil/524288/promoted": {
+        "samples_us": [
+          8.373,
+          8.9915,
+          8.92,
+          8.271,
+          8.361,
+          10.129,
+          7.7275
+        ],
+        "median_us": 8.373,
+        "range_us": [
+          7.7275,
+          10.129
+        ]
+      },
+      "stencil/4194304/original": {
+        "samples_us": [
+          19.749,
+          20.3665,
+          18.334,
+          21.471,
+          18.5605,
+          20.048,
+          20.7375
+        ],
+        "median_us": 20.048,
+        "range_us": [
+          18.334,
+          21.471
+        ]
+      },
+      "stencil/4194304/promoted": {
+        "samples_us": [
+          23.0995,
+          20.656,
+          22.2075,
+          23.0395,
+          20.73,
+          27.1365,
+          23.023
+        ],
+        "median_us": 23.023,
+        "range_us": [
+          20.656,
+          27.1365
+        ]
+      },
+      "stencil/16777216/original": {
+        "samples_us": [
+          269.316,
+          285.999,
+          283.023,
+          281.81,
+          284.161,
+          269.055,
+          269.136
+        ],
+        "median_us": 281.81,
+        "range_us": [
+          269.055,
+          285.999
+        ]
+      },
+      "stencil/16777216/promoted": {
+        "samples_us": [
+          269.264,
+          285.647,
+          286.624,
+          281.922,
+          284.175,
+          269.136,
+          271.551
+        ],
+        "median_us": 281.922,
+        "range_us": [
+          269.136,
+          286.624
+        ]
+      },
+      "stencil-r4/16384/original": {
+        "samples_us": [
+          7.544,
+          5.4005,
+          5.64,
+          5.353,
+          6.4375,
+          5.808,
+          5.834
+        ],
+        "median_us": 5.808,
+        "range_us": [
+          5.353,
+          7.544
+        ]
+      },
+      "stencil-r4/16384/promoted": {
+        "samples_us": [
+          5.591,
+          6.5405,
+          5.764,
+          5.58,
+          6.212,
+          6.711,
+          5.7745
+        ],
+        "median_us": 5.7745,
+        "range_us": [
+          5.58,
+          6.711
+        ]
+      },
+      "stencil-r4/524288/original": {
+        "samples_us": [
+          8.0325,
+          22.3525,
+          9.4285,
+          8.16,
+          8.837,
+          9.115,
+          8.9935
+        ],
+        "median_us": 8.9935,
+        "range_us": [
+          8.0325,
+          22.3525
+        ]
+      },
+      "stencil-r4/524288/promoted": {
+        "samples_us": [
+          8.7525,
+          8.7365,
+          9.2325,
+          8.193,
+          8.589,
+          9.5835,
+          8.433
+        ],
+        "median_us": 8.7365,
+        "range_us": [
+          8.193,
+          9.5835
+        ]
+      },
+      "stencil-r4/4194304/original": {
+        "samples_us": [
+          21.0725,
+          23.134,
+          21.073,
+          21.178,
+          21.0715,
+          21.024,
+          23.8075
+        ],
+        "median_us": 21.073,
+        "range_us": [
+          21.024,
+          23.8075
+        ]
+      },
+      "stencil-r4/4194304/promoted": {
+        "samples_us": [
+          30.671,
+          28.9075,
+          31.76,
+          28.945,
+          31.6885,
+          29.05,
+          28.9305
+        ],
+        "median_us": 29.05,
+        "range_us": [
+          28.9075,
+          31.76
+        ]
+      },
+      "stencil-r4/16777216/original": {
+        "samples_us": [
+          297.52,
+          269.361,
+          289.919,
+          270.753,
+          286.558,
+          177.996,
+          191.665
+        ],
+        "median_us": 270.753,
+        "range_us": [
+          177.996,
+          297.52
+        ]
+      },
+      "stencil-r4/16777216/promoted": {
+        "samples_us": [
+          272.421,
+          269.879,
+          311.936,
+          299.569,
+          198.255,
+          196.277,
+          180.288
+        ],
+        "median_us": 269.879,
+        "range_us": [
+          180.288,
+          311.936
+        ]
+      },
+      "stencil-r8/16384/original": {
+        "samples_us": [
+          6.6,
+          6.3675,
+          7.502,
+          7.5305,
+          6.531,
+          5.693,
+          5.704
+        ],
+        "median_us": 6.531,
+        "range_us": [
+          5.693,
+          7.5305
+        ]
+      },
+      "stencil-r8/16384/promoted": {
+        "samples_us": [
+          6.1275,
+          6.845,
+          6.145,
+          5.8345,
+          6.2885,
+          6.0165,
+          6.9405
+        ],
+        "median_us": 6.145,
+        "range_us": [
+          5.8345,
+          6.9405
+        ]
+      },
+      "stencil-r8/524288/original": {
+        "samples_us": [
+          9.4285,
+          9.3455,
+          10.2655,
+          10.903,
+          12.518,
+          12.002,
+          8.5695
+        ],
+        "median_us": 10.2655,
+        "range_us": [
+          8.5695,
+          12.518
+        ]
+      },
+      "stencil-r8/524288/promoted": {
+        "samples_us": [
+          13.4715,
+          12.692,
+          9.872,
+          10.093,
+          10.696,
+          9.1425,
+          11.6375
+        ],
+        "median_us": 10.696,
+        "range_us": [
+          9.1425,
+          13.4715
+        ]
+      },
+      "stencil-r8/4194304/original": {
+        "samples_us": [
+          33.2645,
+          36.4235,
+          34.5925,
+          35.105,
+          38.672,
+          33.747,
+          34.136
+        ],
+        "median_us": 34.5925,
+        "range_us": [
+          33.2645,
+          38.672
+        ]
+      },
+      "stencil-r8/4194304/promoted": {
+        "samples_us": [
+          43.8405,
+          56.592,
+          43.248,
+          49.0875,
+          43.3765,
+          43.2965,
+          49.0885
+        ],
+        "median_us": 43.8405,
+        "range_us": [
+          43.248,
+          56.592
+        ]
+      },
+      "stencil-r8/16777216/original": {
+        "samples_us": [
+          305.089,
+          311.671,
+          331.359,
+          312.304,
+          312.782,
+          334.351,
+          338.427
+        ],
+        "median_us": 312.782,
+        "range_us": [
+          305.089,
+          338.427
+        ]
+      },
+      "stencil-r8/16777216/promoted": {
+        "samples_us": [
+          293.052,
+          323.521,
+          353.754,
+          299.28,
+          350.32,
+          332.538,
+          285.347
+        ],
+        "median_us": 323.521,
+        "range_us": [
+          285.347,
+          353.754
+        ]
+      },
+      "stencil-r16/16384/original": {
+        "samples_us": [
+          10.1455,
+          8.9495,
+          9.084,
+          9.287,
+          8.834,
+          12.601,
+          9.252
+        ],
+        "median_us": 9.252,
+        "range_us": [
+          8.834,
+          12.601
+        ]
+      },
+      "stencil-r16/16384/promoted": {
+        "samples_us": [
+          12.187,
+          9.046,
+          9.693,
+          10.753,
+          8.756,
+          9.3985,
+          9.811
+        ],
+        "median_us": 9.693,
+        "range_us": [
+          8.756,
+          12.187
+        ]
+      },
+      "stencil-r16/524288/original": {
+        "samples_us": [
+          11.286,
+          10.672,
+          10.753,
+          10.781,
+          11.169,
+          10.7685,
+          12.3525
+        ],
+        "median_us": 10.781,
+        "range_us": [
+          10.672,
+          12.3525
+        ]
+      },
+      "stencil-r16/524288/promoted": {
+        "samples_us": [
+          10.723,
+          13.024,
+          12.9335,
+          11.0655,
+          10.9035,
+          14.1575,
+          10.6585
+        ],
+        "median_us": 11.0655,
+        "range_us": [
+          10.6585,
+          14.1575
+        ]
+      },
+      "stencil-r16/4194304/original": {
+        "samples_us": [
+          61.102,
+          57.8075,
+          60.6015,
+          62.9425,
+          62.815,
+          75.372,
+          78.935
+        ],
+        "median_us": 62.815,
+        "range_us": [
+          57.8075,
+          78.935
+        ]
+      },
+      "stencil-r16/4194304/promoted": {
+        "samples_us": [
+          70.9945,
+          86.256,
+          72.048,
+          74.128,
+          70.7005,
+          71.517,
+          82.688
+        ],
+        "median_us": 72.048,
+        "range_us": [
+          70.7005,
+          86.256
+        ]
+      },
+      "stencil-r16/16777216/original": {
+        "samples_us": [
+          366.882,
+          372.206,
+          375.574,
+          373.515,
+          362.004,
+          373.615,
+          371.695
+        ],
+        "median_us": 372.206,
+        "range_us": [
+          362.004,
+          375.574
+        ]
+      },
+      "stencil-r16/16777216/promoted": {
+        "samples_us": [
+          355.822,
+          320.668,
+          336.622,
+          340.192,
+          357.182,
+          341.648,
+          342.16
+        ],
+        "median_us": 341.648,
+        "range_us": [
+          320.668,
+          357.182
+        ]
+      }
+    },
+    "transaction": {
+      "stencil/16384/original": {
+        "samples_us": [
+          97.8,
+          62.6,
+          65.1,
+          65.4,
+          72.6,
+          61.1,
+          64.0
+        ],
+        "median_us": 65.1,
+        "range_us": [
+          61.1,
+          97.8
+        ]
+      },
+      "stencil/16384/promoted": {
+        "samples_us": [
+          70.9,
+          64.5,
+          65.3,
+          65.6,
+          57.3,
+          63.7,
+          63.0
+        ],
+        "median_us": 64.5,
+        "range_us": [
+          57.3,
+          70.9
+        ]
+      },
+      "stencil/524288/original": {
+        "samples_us": [
+          1397.1,
+          792.0,
+          1082.6,
+          980.0,
+          948.0,
+          959.5,
+          1045.8
+        ],
+        "median_us": 980.0,
+        "range_us": [
+          792.0,
+          1397.1
+        ]
+      },
+      "stencil/524288/promoted": {
+        "samples_us": [
+          1024.4,
+          870.4,
+          863.4,
+          1231.0,
+          854.6,
+          1052.9,
+          6041.1
+        ],
+        "median_us": 1024.4,
+        "range_us": [
+          854.6,
+          6041.1
+        ]
+      },
+      "stencil/4194304/original": {
+        "samples_us": [
+          4040.3,
+          4097.8,
+          4004.8,
+          5068.3,
+          7212.0,
+          5855.6,
+          4027.3
+        ],
+        "median_us": 4097.8,
+        "range_us": [
+          4004.8,
+          7212.0
+        ]
+      },
+      "stencil/4194304/promoted": {
+        "samples_us": [
+          4378.6,
+          4146.0,
+          4759.7,
+          4118.6,
+          5335.0,
+          6419.8,
+          5756.3
+        ],
+        "median_us": 4759.7,
+        "range_us": [
+          4118.6,
+          6419.8
+        ]
+      },
+      "stencil/16777216/original": {
+        "samples_us": [
+          16518.8,
+          15700.9,
+          18546.2,
+          15158.5,
+          14694.9,
+          14180.9,
+          19046.6
+        ],
+        "median_us": 15700.9,
+        "range_us": [
+          14180.9,
+          19046.6
+        ]
+      },
+      "stencil/16777216/promoted": {
+        "samples_us": [
+          17357.3,
+          16093.4,
+          17058.2,
+          15404.7,
+          16883.7,
+          16549.8,
+          16430.3
+        ],
+        "median_us": 16549.8,
+        "range_us": [
+          15404.7,
+          17357.3
+        ]
+      },
+      "stencil-r4/16384/original": {
+        "samples_us": [
+          64.1,
+          66.5,
+          64.6,
+          60.0,
+          182.2,
+          66.0,
+          67.2
+        ],
+        "median_us": 66.0,
+        "range_us": [
+          60.0,
+          182.2
+        ]
+      },
+      "stencil-r4/16384/promoted": {
+        "samples_us": [
+          64.3,
+          64.7,
+          65.0,
+          64.7,
+          67.8,
+          65.9,
+          65.8
+        ],
+        "median_us": 65.0,
+        "range_us": [
+          64.3,
+          67.8
+        ]
+      },
+      "stencil-r4/524288/original": {
+        "samples_us": [
+          869.3,
+          1018.6,
+          1063.9,
+          778.6,
+          840.2,
+          888.1,
+          1171.3
+        ],
+        "median_us": 888.1,
+        "range_us": [
+          778.6,
+          1171.3
+        ]
+      },
+      "stencil-r4/524288/promoted": {
+        "samples_us": [
+          976.9,
+          1126.3,
+          1007.2,
+          1128.0,
+          999.2,
+          957.7,
+          1124.3
+        ],
+        "median_us": 1007.2,
+        "range_us": [
+          957.7,
+          1128.0
+        ]
+      },
+      "stencil-r4/4194304/original": {
+        "samples_us": [
+          3763.4,
+          4033.8,
+          4370.8,
+          3861.8,
+          3816.5,
+          5273.1,
+          5145.0
+        ],
+        "median_us": 4033.8,
+        "range_us": [
+          3763.4,
+          5273.1
+        ]
+      },
+      "stencil-r4/4194304/promoted": {
+        "samples_us": [
+          3905.9,
+          3942.1,
+          3836.6,
+          3899.1,
+          3727.2,
+          5366.3,
+          5288.8
+        ],
+        "median_us": 3905.9,
+        "range_us": [
+          3727.2,
+          5366.3
+        ]
+      },
+      "stencil-r4/16777216/original": {
+        "samples_us": [
+          14980.8,
+          14790.6,
+          20468.0,
+          17112.8,
+          17876.8,
+          16348.1,
+          32653.4
+        ],
+        "median_us": 17112.8,
+        "range_us": [
+          14790.6,
+          32653.4
+        ]
+      },
+      "stencil-r4/16777216/promoted": {
+        "samples_us": [
+          16755.8,
+          14757.1,
+          20285.3,
+          18242.0,
+          18037.1,
+          17590.8,
+          19582.2
+        ],
+        "median_us": 18037.1,
+        "range_us": [
+          14757.1,
+          20285.3
+        ]
+      },
+      "stencil-r8/16384/original": {
+        "samples_us": [
+          62.1,
+          65.0,
+          63.7,
+          58.5,
+          67.0,
+          63.3,
+          64.8
+        ],
+        "median_us": 63.7,
+        "range_us": [
+          58.5,
+          67.0
+        ]
+      },
+      "stencil-r8/16384/promoted": {
+        "samples_us": [
+          64.1,
+          63.5,
+          63.7,
+          66.6,
+          68.8,
+          63.7,
+          65.5
+        ],
+        "median_us": 64.1,
+        "range_us": [
+          63.5,
+          68.8
+        ]
+      },
+      "stencil-r8/524288/original": {
+        "samples_us": [
+          996.1,
+          1011.8,
+          956.2,
+          886.3,
+          835.5,
+          835.4,
+          967.0
+        ],
+        "median_us": 956.2,
+        "range_us": [
+          835.4,
+          1011.8
+        ]
+      },
+      "stencil-r8/524288/promoted": {
+        "samples_us": [
+          1011.6,
+          936.0,
+          1170.4,
+          905.4,
+          935.1,
+          935.6,
+          1868.2
+        ],
+        "median_us": 936.0,
+        "range_us": [
+          905.4,
+          1868.2
+        ]
+      },
+      "stencil-r8/4194304/original": {
+        "samples_us": [
+          4111.3,
+          3778.9,
+          4051.2,
+          4028.9,
+          5653.4,
+          4925.4,
+          5224.4
+        ],
+        "median_us": 4111.3,
+        "range_us": [
+          3778.9,
+          5653.4
+        ]
+      },
+      "stencil-r8/4194304/promoted": {
+        "samples_us": [
+          4215.2,
+          4395.4,
+          3936.4,
+          4835.6,
+          5078.0,
+          5565.9,
+          4156.5
+        ],
+        "median_us": 4395.4,
+        "range_us": [
+          3936.4,
+          5565.9
+        ]
+      },
+      "stencil-r8/16777216/original": {
+        "samples_us": [
+          23146.5,
+          18519.4,
+          19462.0,
+          16629.8,
+          20536.2,
+          23061.6,
+          21143.2
+        ],
+        "median_us": 20536.2,
+        "range_us": [
+          16629.8,
+          23146.5
+        ]
+      },
+      "stencil-r8/16777216/promoted": {
+        "samples_us": [
+          16287.1,
+          20355.2,
+          21740.4,
+          17869.7,
+          21061.7,
+          18247.5,
+          20491.1
+        ],
+        "median_us": 20355.2,
+        "range_us": [
+          16287.1,
+          21740.4
+        ]
+      },
+      "stencil-r16/16384/original": {
+        "samples_us": [
+          102.6,
+          101.4,
+          99.8,
+          113.1,
+          100.7,
+          108.4,
+          105.7
+        ],
+        "median_us": 102.6,
+        "range_us": [
+          99.8,
+          113.1
+        ]
+      },
+      "stencil-r16/16384/promoted": {
+        "samples_us": [
+          105.3,
+          109.7,
+          100.6,
+          105.2,
+          100.2,
+          103.5,
+          102.0
+        ],
+        "median_us": 103.5,
+        "range_us": [
+          100.2,
+          109.7
+        ]
+      },
+      "stencil-r16/524288/original": {
+        "samples_us": [
+          875.2,
+          901.2,
+          878.1,
+          871.4,
+          874.6,
+          889.6,
+          792.7
+        ],
+        "median_us": 875.2,
+        "range_us": [
+          792.7,
+          901.2
+        ]
+      },
+      "stencil-r16/524288/promoted": {
+        "samples_us": [
+          895.0,
+          855.2,
+          916.0,
+          888.7,
+          1062.2,
+          896.1,
+          859.9
+        ],
+        "median_us": 895.0,
+        "range_us": [
+          855.2,
+          1062.2
+        ]
+      },
+      "stencil-r16/4194304/original": {
+        "samples_us": [
+          6030.0,
+          3743.1,
+          3954.2,
+          3852.3,
+          3916.9,
+          6055.1,
+          8837.2
+        ],
+        "median_us": 3954.2,
+        "range_us": [
+          3743.1,
+          8837.2
+        ]
+      },
+      "stencil-r16/4194304/promoted": {
+        "samples_us": [
+          5120.1,
+          4088.3,
+          4115.3,
+          3845.9,
+          4173.3,
+          5762.4,
+          6136.2
+        ],
+        "median_us": 4173.3,
+        "range_us": [
+          3845.9,
+          6136.2
+        ]
+      },
+      "stencil-r16/16777216/original": {
+        "samples_us": [
+          15066.7,
+          16523.7,
+          15233.2,
+          14459.9,
+          16695.7,
+          17343.9,
+          15849.2
+        ],
+        "median_us": 15849.2,
+        "range_us": [
+          14459.9,
+          17343.9
+        ]
+      },
+      "stencil-r16/16777216/promoted": {
+        "samples_us": [
+          15379.8,
+          16638.2,
+          42505.4,
+          16275.6,
+          16358.9,
+          15667.3,
+          16815.3
+        ],
+        "median_us": 16358.9,
+        "range_us": [
+          15379.8,
+          42505.4
+        ]
+      }
+    }
+  },
+  "comparisons": {
+    "sample": {
+      "stencil/16384": {
+        "original_over_promoted_median_ratio": 1.013158983696102,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/524288": {
+        "original_over_promoted_median_ratio": 0.9269676340618656,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/4194304": {
+        "original_over_promoted_median_ratio": 0.8707813925205229,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/16777216": {
+        "original_over_promoted_median_ratio": 0.99960272699541,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/16384": {
+        "original_over_promoted_median_ratio": 1.0058013680838167,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/524288": {
+        "original_over_promoted_median_ratio": 1.0294168145138214,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/4194304": {
+        "original_over_promoted_median_ratio": 0.7254044750430293,
+        "range_comparison": "promoted higher; nonoverlapping full ranges"
+      },
+      "stencil-r4/16777216": {
+        "original_over_promoted_median_ratio": 1.0032384883595982,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/16384": {
+        "original_over_promoted_median_ratio": 1.0628152969894222,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/524288": {
+        "original_over_promoted_median_ratio": 0.9597513089005235,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/4194304": {
+        "original_over_promoted_median_ratio": 0.7890535007584312,
+        "range_comparison": "promoted higher; nonoverlapping full ranges"
+      },
+      "stencil-r8/16777216": {
+        "original_over_promoted_median_ratio": 0.966805864225197,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/16384": {
+        "original_over_promoted_median_ratio": 0.9545032497678738,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/524288": {
+        "original_over_promoted_median_ratio": 0.9742894582260179,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/4194304": {
+        "original_over_promoted_median_ratio": 0.871849322673773,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/16777216": {
+        "original_over_promoted_median_ratio": 1.0894429354189106,
+        "range_comparison": "promoted lower; nonoverlapping full ranges"
+      }
+    },
+    "transaction": {
+      "stencil/16384": {
+        "original_over_promoted_median_ratio": 1.0093023255813953,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/524288": {
+        "original_over_promoted_median_ratio": 0.9566575556423271,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/4194304": {
+        "original_over_promoted_median_ratio": 0.860936613652121,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil/16777216": {
+        "original_over_promoted_median_ratio": 0.948706328777387,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/16384": {
+        "original_over_promoted_median_ratio": 1.0153846153846153,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/524288": {
+        "original_over_promoted_median_ratio": 0.8817513899920572,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/4194304": {
+        "original_over_promoted_median_ratio": 1.0327453339819248,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r4/16777216": {
+        "original_over_promoted_median_ratio": 0.9487556203602575,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/16384": {
+        "original_over_promoted_median_ratio": 0.9937597503900157,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/524288": {
+        "original_over_promoted_median_ratio": 1.0215811965811967,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/4194304": {
+        "original_over_promoted_median_ratio": 0.9353642444373664,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r8/16777216": {
+        "original_over_promoted_median_ratio": 1.0088920767174971,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/16384": {
+        "original_over_promoted_median_ratio": 0.9913043478260869,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/524288": {
+        "original_over_promoted_median_ratio": 0.9778770949720671,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/4194304": {
+        "original_over_promoted_median_ratio": 0.9474995806675771,
+        "range_comparison": "overlapping full ranges"
+      },
+      "stencil-r16/16777216": {
+        "original_over_promoted_median_ratio": 0.9688426483443264,
+        "range_comparison": "overlapping full ranges"
+      }
+    }
+  }
+}

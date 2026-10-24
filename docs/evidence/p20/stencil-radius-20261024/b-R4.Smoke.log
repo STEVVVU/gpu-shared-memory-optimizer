@@ -1,0 +1,31 @@
+device=NVIDIA GeForce RTX 5080 Laptop GPU driver=13010 sms=60
+allocation_bytes=1056
+correctness mode=stencil-r4 blocks=1 pattern=0 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=1 pattern=0 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=1 pattern=1 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=1 pattern=1 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=1 pattern=2 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=1 pattern=2 side=promoted poisoned=1 oracle=PASS
+blocks=1 original execution complete
+blocks=1 promoted execution complete
+mode=stencil-r4 elements=128 oracle=PASS timing=disabled
+allocation_bytes=3104
+correctness mode=stencil-r4 blocks=3 pattern=0 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=3 pattern=0 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=3 pattern=1 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=3 pattern=1 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=3 pattern=2 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=3 pattern=2 side=promoted poisoned=1 oracle=PASS
+blocks=3 original execution complete
+blocks=3 promoted execution complete
+mode=stencil-r4 elements=384 oracle=PASS timing=disabled
+allocation_bytes=17440
+correctness mode=stencil-r4 blocks=17 pattern=0 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=17 pattern=0 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=17 pattern=1 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=17 pattern=1 side=promoted poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=17 pattern=2 side=original poisoned=1 oracle=PASS
+correctness mode=stencil-r4 blocks=17 pattern=2 side=promoted poisoned=1 oracle=PASS
+blocks=17 original execution complete
+blocks=17 promoted execution complete
+mode=stencil-r4 elements=2176 oracle=PASS timing=disabled

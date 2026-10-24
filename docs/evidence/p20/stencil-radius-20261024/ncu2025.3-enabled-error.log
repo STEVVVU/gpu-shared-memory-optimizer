@@ -1,0 +1,5 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 62912 (C:\Users\steve\Projects\gpu-shared-memory-optimizer\build\bin\cuda-runner.exe)
+==PROF== Disconnected from process 62912
+==ERROR== The application returned an error code (1).

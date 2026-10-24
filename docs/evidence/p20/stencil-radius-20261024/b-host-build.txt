@@ -1,0 +1,2 @@
+CUDA host runner: nvcc --std=c++17 -O2; device kernels separately lowered by llc -O3
+CudaRunner.cpp SHA256=14B96ECFA8D931AC8B0974F8A3ECA1325AC10CDCC2189A80B7FECBCC86FE1E2C

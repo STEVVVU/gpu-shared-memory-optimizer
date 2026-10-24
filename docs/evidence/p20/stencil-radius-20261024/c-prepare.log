@@ -1,0 +1,9 @@
+PASS fixed modes, uint32 wrapping oracle and distinct halos
+warning: in the working copy of '.agents/skills/verify-gpu-shared-memory-optimizer/features/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.github/workflows/p20-cpu-llvm23.yml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'include/StencilSharedCache.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/StencilSharedCache.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/CudaRunner.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/verify.ps1', LF will be replaced by CRLF the next time Git touches it
+Prepared separate radius campaign: evidence/benchmark-stencil-radius-20261024-c

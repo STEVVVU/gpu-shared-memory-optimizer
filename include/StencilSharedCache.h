@@ -3,7 +3,7 @@
 
 #include "llvm/IR/PassManager.h"
 
-// Caches a validated, one-dimensional three-point stencil tile in CTA shared
+// Caches a validated, fixed-radius i32 stencil tile in CTA shared
 // memory. The accepted launch/padding contract is documented in the feature map.
 class StencilSharedCachePass
     : public llvm::PassInfoMixin<StencilSharedCachePass> {

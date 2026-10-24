@@ -66,6 +66,7 @@ switch ($Phase) {
         if ($LASTEXITCODE -ne 0) { throw 'CUDA Driver API runner compilation failed.' }
         if (-not (Test-Path -LiteralPath $gpuExe) -or -not (Test-Path -LiteralPath $runner)) { throw 'GPU executables were not produced.' }
         'CUDA host runner: nvcc --std=c++17 -O2; device kernels separately lowered by llc -O3' | Set-Content (Join-Path $bin 'cuda-runner-build.txt')
+        "CudaRunner.cpp SHA256=$((Get-FileHash (Join-Path $repo 'tools/CudaRunner.cpp') -Algorithm SHA256).Hash)" | Add-Content (Join-Path $bin 'cuda-runner-build.txt')
         Write-Output "Built $exe, $gpuExe, and $runner"
     }
     'Doctor' {
@@ -82,6 +83,8 @@ switch ($Phase) {
         $gpuOutput = & $nvidiaSmi -L 2>&1 | Out-String
         if ($LASTEXITCODE -ne 0 -or $gpuOutput -notmatch 'RTX 5080 Laptop GPU') { throw 'Expected RTX 5080 Laptop GPU is not visible.' }
         Write-Output "Ready: LLVM $version; CUDA 13.0; RTX 5080 Laptop GPU; $exe"
+        & $runner --self-test
+        if ($LASTEXITCODE -ne 0) { throw 'CUDA runner CPU self-check failed.' }
     }
     'Drive' {
         $exe = Join-Path $bin 'static.exe'
@@ -103,6 +106,14 @@ switch ($Phase) {
             if ($output -notmatch $pattern) { throw "Expected direct-call count missing ($pattern); see $runDir" }
         }
         $gpuInput = Join-Path $repo 'test\Inputs\P20Stencil.ll'
+        & python (Join-Path $repo 'tools/check-stencil.py') --optimizer $gpuExe --llvm-bin $llvmBin --evidence (Join-Path $runDir 'stencil-legality')
+        if ($LASTEXITCODE -ne 0) { throw 'Fixed-radius CPU legality/verifier/PTX checks failed.' }
+        foreach ($radius in @(4, 8, 16)) {
+            $radiusStem = Join-Path $runDir "stencil-legality/r$radius-positive"
+            $radiusCuda = & $runner "$radiusStem.original.ptx" "$radiusStem.optimized.ptx" "stencil-r$radius" --smoke 2>&1 | Out-String
+            $radiusCuda | Set-Content (Join-Path $runDir "stencil-r$radius-cuda.log") -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw "Radius $radius native CUDA oracle failed: $radiusCuda" }
+        }
         $gpuOutput = Join-Path $runDir 'stencil.optimized.ll'
         $passLog = & $gpuExe $gpuInput -o $gpuOutput 2>&1 | Out-String
         if ($LASTEXITCODE -ne 0) { throw "Stencil optimizer failed; $passLog" }
@@ -191,6 +202,8 @@ switch ($Phase) {
             @{ Name = 'volatile-load'; Text = $stencilText.Replace('%left = load i32,', '%left = load volatile i32,') },
             @{ Name = 'possibly-aliasing'; Text = $stencilText.Replace('noalias readonly', 'readonly').Replace('noalias writeonly', 'writeonly') },
             @{ Name = 'overflow-flags'; Text = $stencilText.Replace('%partial = add i32', '%partial = add nsw i32') },
+            @{ Name = 'missing-tid'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilMissingTid.ll') -Raw },
+            @{ Name = 'weak-alignment'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilWeakAlignment.ll') -Raw },
             @{ Name = 'byte-input-gep'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilByteInputGep.ll') -Raw },
             @{ Name = 'byte-output-gep'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilByteOutputGep.ll') -Raw }
         )
@@ -220,11 +233,14 @@ switch ($Phase) {
     'Evidence' {
         if (-not (Test-Path -LiteralPath $activeRun)) { throw 'Run Drive first; no active evidence run is recorded.' }
         $runDir = (Get-Content -LiteralPath $activeRun -Raw).Trim()
-        foreach ($name in @('action.txt', 'output.log', 'optimizer.log', 'stencil.original.ptx', 'stencil.optimized.ptx', 'cuda-results.log', 'private.optimized.ptx', 'private-cuda-results.log', 'negative.log', 'private-byte-gep.log', 'wrong-geometry.log', 'volatile-load.log', 'possibly-aliasing.log', 'overflow-flags.log', 'byte-input-gep.log', 'byte-output-gep.log')) {
+        foreach ($name in @('action.txt', 'output.log', 'optimizer.log', 'stencil.original.ptx', 'stencil.optimized.ptx', 'cuda-results.log', 'private.optimized.ptx', 'private-cuda-results.log', 'negative.log', 'private-byte-gep.log', 'wrong-geometry.log', 'volatile-load.log', 'possibly-aliasing.log', 'overflow-flags.log', 'byte-input-gep.log', 'byte-output-gep.log', 'missing-tid.log', 'weak-alignment.log')) {
             if (-not (Test-Path -LiteralPath (Join-Path $runDir $name))) { throw "Evidence is incomplete: $name" }
         }
         $manifest = Join-Path $runDir 'sha256.txt'
-        Get-ChildItem -LiteralPath $runDir -File | Where-Object Name -ne 'sha256.txt' | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -LiteralPath $manifest -Encoding ascii
+        foreach ($radius in @(4, 8, 16)) {
+            if (-not (Test-Path (Join-Path $runDir "stencil-r$radius-cuda.log"))) { throw "Missing native radius $radius evidence." }
+        }
+        Get-ChildItem -LiteralPath $runDir -File -Recurse | Where-Object Name -ne 'sha256.txt' | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([IO.Path]::GetRelativePath($runDir, $_.Path))" } | Set-Content -LiteralPath $manifest -Encoding ascii
         Get-Content -LiteralPath $manifest
         Get-Content -LiteralPath (Join-Path $runDir 'action.txt')
         Get-Content -LiteralPath (Join-Path $runDir 'output.log')

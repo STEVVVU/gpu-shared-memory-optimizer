@@ -1,0 +1,6 @@
+Command: "<repo>/build\bin\static.exe" "<repo>/test\Inputs\CallCounterInput.ll"
+Exit code: 0
+GPU command: "<repo>/build\bin\shared-memory-opt.exe" "<repo>/test\Inputs\P20Stencil.ll" -o "<repo>/evidence\verification\run-20261024-150156901\stencil.optimized.ll"; llc --march=nvptx64 --mcpu=sm_120; "<repo>/build\bin\cuda-runner.exe" original.ptx optimized.ptx stencil
+Static global load instructions: original=3 optimized=3
+Expected dynamic loads per CTA from the validated contract: original=384 optimized=130 (128 center + 2 halo)
+

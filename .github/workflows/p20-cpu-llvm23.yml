@@ -74,6 +74,8 @@ jobs:
           llc=/usr/lib/llvm-23/bin/llc
           optimizer="$PWD/build/ci/bin/shared-memory-opt"
           mkdir -p build/ci/evidence
+          python3 tools/check-stencil.py --optimizer "$optimizer" \
+            --llvm-bin /usr/lib/llvm-23/bin --evidence build/ci/evidence/stencil-legality
 
           stencil=test/Inputs/P20Stencil.ll
           "$optimizer" "$stencil" -o build/ci/evidence/stencil.optimized.ll

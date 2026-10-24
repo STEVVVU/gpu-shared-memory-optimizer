@@ -1,0 +1,2 @@
+name, driver_version, memory.total [MiB], power.draw [W], clocks.current.sm [MHz], clocks.current.memory [MHz], temperature.gpu
+NVIDIA GeForce RTX 5080 Laptop GPU, 592.01, 16303 MiB, 33.32 W, 1252 MHz, 810 MHz, 49

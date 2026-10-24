@@ -1,0 +1,834 @@
+diff --git a/.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md b/.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md
+index c88ea44..7fe84ee 100644
+--- a/.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md
++++ b/.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md
+@@ -5,7 +5,7 @@ description: Build and drive the LLVM GPU shared-memory optimizer CLI, check its
+ 
+ # Verify GPU Shared Memory Optimizer
+ 
+-**Status: implemented and locally proved on the RTX 5080 for the mapped narrow fixtures.** The skill covers an inherited LLVM CLI, a bounded LLVM module optimizer, NVPTX generation, legality fixtures, and a CUDA Driver API runner. It does not claim generic loop transformation or production workload coverage.
++**Status: radius-1 stencil and private-slot paths were locally proved on the RTX 5080; fixed-radius 4/8/16 extension awaits its new native validation.** The skill covers an inherited LLVM CLI, a bounded LLVM module optimizer, NVPTX generation, legality fixtures, and a CUDA Driver API runner. It does not claim generic loop transformation or production workload coverage.
+ 
+ The primary user surface is the command-line LLVM IR optimizer. The repository also has inherited `llvm-tutor` command-line tools and lit tests. Use PowerShell 7 (`pwsh`) from the project root; the maintained driver is `tools/verify.ps1`.
+ 
+@@ -15,11 +15,13 @@ Run `tools/verify.ps1 Launch`. It builds the inherited `static` CLI, `shared-mem
+ 
+ ## Doctor
+ 
+-Run `tools/verify.ps1 Doctor` before driving. It checks the built CLIs, LLVM version, CUDA compiler, and visible NVIDIA GPU. A missing required device or mismatched SDK makes the instance not ready.
++Run `tools/verify.ps1 Doctor` before driving. It checks the built CLIs, LLVM version, CUDA compiler, visible NVIDIA GPU and the runner's CPU-only modulo-i32 oracle self-check. A missing required device or mismatched SDK makes the instance not ready.
+ 
+ ## Drive
+ 
+-Run `tools/verify.ps1 Drive`. It invokes the direct-call counter; verifies original and transformed LLVM IR; generates original/optimized sm_120 PTX; checks global/shared instructions and barriers; runs the padded stencil and private-slot kernels on the real GPU; compares results with CPU oracles; and confirms unsupported geometry, aliasing, volatile, and cross-thread cases remain unchanged.
++Run `tools/verify.ps1 Drive`. It invokes the direct-call counter; runs `tools/check-stencil.py` for all four radii with positive, commuted and conservative rejection cases; verifies original/transformed LLVM IR and sm_120 PTX; checks global/shared instructions and barriers; and runs the stencil and private-slot kernels against CPU oracles. Each radius uses 1, 3 and 17 CTAs with deterministic ordinary values, full-bit random values and distinct halos plus wrapping values; every output is poisoned before correctness launches. Unsupported geometry, aliasing, volatile/atomic, weak alignment, missing lane, byte GEPs, malformed offsets/sums and extra instructions remain unchanged.
++
++The reusable CPU-only subset is `python tools/check-stencil.py --optimizer build/bin/shared-memory-opt.exe --llvm-bin <LLVM>/bin --evidence evidence/verification/<run>/stencil-legality`. `--fixtures-only` verifies generated inputs without invoking the optimizer or NVPTX compiler. The Linux CPU workflow runs the full subset against its newly built binary. This subset provides no GPU-correctness or performance evidence.
+ 
+ ## Evidence
+ 
+@@ -31,4 +33,6 @@ Run `tools/verify.ps1 Cleanup`. It removes only the active-run pointer and prese
+ 
+ ## Helpers
+ 
+-The PowerShell driver is executable as documented above. Its phase names correspond to this skill's Launch, Doctor, Drive, Evidence, and Cleanup sections. Both mapped GPU features completed this lifecycle locally. The inherited upstream CMake target build has not passed with this Windows LLVM SDK; use the verifier's direct MSVC link route while that remains unresolved.
++The PowerShell driver is executable as documented above. Its phase names correspond to this skill's Launch, Doctor, Drive, Evidence, and Cleanup sections. Historical radius-1 and private-slot features completed this lifecycle locally; re-drive the extension before claiming it proved. Use the verifier's direct MSVC link route; the separate P20 CMake target has also built, while the full inherited plugin suite remains unsupported with this static Windows SDK.
++
++Run the separate fixed-radius campaign with `tools/benchmark-stencils.ps1 Prepare`, `Smoke`, `Measure` after Launch, in an exclusive GPU slot. Use a fresh `-RunDirectory` for another campaign; prepared binaries, sources and PTX are hashed, and existing logs are preserved. `python tools/summarize-stencils.py --run <directory> --output <new-summary.json> --accepted-window <confirmed-slot>` validates exact dimensions, alternating repeats, completed work and both timer scopes. `python tools/summarize-stencils.py --self-test` checks its failure handling. Keep historical `benchmark.ps1`, its logs and `metrics-release-summary.json` unchanged.
+diff --git a/.agents/skills/verify-gpu-shared-memory-optimizer/features/README.md b/.agents/skills/verify-gpu-shared-memory-optimizer/features/README.md
+index f9cd85d..b5f262a 100644
+--- a/.agents/skills/verify-gpu-shared-memory-optimizer/features/README.md
++++ b/.agents/skills/verify-gpu-shared-memory-optimizer/features/README.md
+@@ -1,5 +1,5 @@
+ # Feature map
+ 
+ - [Static call counter](static-call-counter.md): inherited LLVM command-line feature used to prove the LLVM SDK and project sources can build and run together.
+-- [Padded three-point stencil tile](stencil-tile.md): validates a narrow affine global-load pattern, creates a cooperative address-space-3 tile with two halo lanes, and checks real RTX 5080 execution against a CPU oracle.
++- [Padded fixed-radius stencil tile](stencil-tile.md): validates exact 3/9/17/33-tap i32 sums, creates cooperative address-space-3 tiles, and drives the native runner against uint32 CPU oracles. Historical native evidence covers radius 1; extension evidence is recorded separately.
+ - [Thread-private shared-slot promotion](private-slot.md): removes a same-lane shared store/load pair while retaining the CTA barrier, with cross-thread access as a negative case.
+diff --git a/.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md b/.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md
+index 8a390d8..bfc5cbe 100644
+--- a/.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md
++++ b/.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md
+@@ -1,21 +1,40 @@
+-# Padded three-point stencil tile
++# Padded fixed-radius stencil tile
+ 
+ ## Sub-features
+ 
+-For a single-block LLVM kernel with a validated exact three-point i32 sum, replace three global reads per output lane with one cooperative center read per lane, two conditional halo reads per CTA, address-space-3 shared stores, one converged CTA barrier, and two shared neighbor reads per lane. The lane reuses its center SSA value. Every source and output GEP must use i32 as its source element type, matching the four-byte address arithmetic used by the rewrite.
++The pass accepts only dense i32 sums at radii R = 1, 4, 8, 16 (3, 9, 17, 33 taps), each supplied as a separate single-basic-block LLVM fixture with the same kernel name. The output is one ordinary scalar i32 store at index `zext i32(add(mul(ctaid.x,128),tid.x)) to i64`; add and multiply operands may commute, and the actual unique tid.x operand must be present. Input has exactly one ordinary nonvolatile, nonatomic i32 load at each offset [-R,R] from that output index. Nonzero offsets are unflagged i64 add/sub operations after zext, so left halos never wrap through 32-bit arithmetic. The stored value is an unflagged modulo-32-bit add tree using every load exactly once.
++
++All input and output GEP source types are scalar i32 with exactly one index. Input/output accesses require alignment at least four bytes. Function-level `nosync` and any restricted `memory(...)` effect reject the function unchanged because the replacement adds a barrier, shared writes and shared reads. Explicit `memory(readwrite)` is equivalent to unknown effects and remains accepted. Only the matched operations, unique tid.x/ctaid.x calls, one store and void return are accepted: additional loads, calls, arithmetic, effects, flags or divergent control flow reject the function unchanged.
++
++The replacement has a `128+2R` element address-space-3 tile. Lane t stores input[g] at tile[t+R] and retains its center SSA value. Lanes t<R also store input[g-R] at tile[t]; lanes t>=128-R store input[g+R] at tile[t+2R]. Those three ownership ranges are disjoint and cover every tile element. All lanes converge at one unconditional CTA barrier, then sum the retained center and tile[t+R+d] for every nonzero d in [-R,R]. No shared center reload is introduced.
+ 
+ ## How to get to it (user POV)
+ 
+-Build `shared-memory-opt`, then run it on `test/Inputs/P20Stencil.ll`. The accepted contract is exact: PTX kernel with `nvvm.reqntid="128,1,1"`; input and output are separate `noalias` pointers; input is read-only and output write-only; the caller passes an interior input pointer with one valid i32 halo on either side; output length is a positive multiple of 128; and the largest global index fits in unsigned i32. Unsupported IR stays unchanged.
++Build `shared-memory-opt`, then use `test/Inputs/P20Stencil.ll`, `P20StencilR4.ll`, `P20StencilR8.ll`, or `P20StencilR16.ll`. The exact attribute strings are:
++
++| R | `p20.stencil-contract` |
++| --- | --- |
++| 1 | `one-dimensional-padded-i32-3point;128-threads;multiple-of-128-elements;index-fits-u32` |
++| 4 | `one-dimensional-padded-i32-9point;128-threads;multiple-of-128-elements;index-fits-u32` |
++| 8 | `one-dimensional-padded-i32-17point;128-threads;multiple-of-128-elements;index-fits-u32` |
++| 16 | `one-dimensional-padded-i32-33point;128-threads;multiple-of-128-elements;index-fits-u32` |
++
++The host must launch a 1D grid of unconditional full `(128,1,1)` CTAs for N outputs, N positive and divisible by 128, with `N-1 <= UINT32_MAX`. It must pass separate four-byte-aligned input/output arrays using noalias, readonly input and writeonly output attributes. Input points to the first interior element and has R valid i32 elements in each halo within the same allocation; output has N elements. These are host preconditions, not facts inferred or runtime-checked by the pass. Unsupported IR is left unchanged. The radius-1 contract string and historical negative cases remain supported.
+ 
+ ## Driving it with the project verification script
+ 
+-Run `tools/verify.ps1 Launch`, `Doctor`, `Drive`, `Evidence`, and `Cleanup`. Drive runs LLVM verification before and after the transform, emits NVPTX for sm_120, checks `ld.global`/`ld.shared`/`st.shared`/`bar.sync`, runs the original and transformed PTX on the RTX 5080, and compares each output with an independently computed CPU sum for 1, 3, and 17 blocks. Negative cases remove the required noalias contract, make a load volatile, change the required block size, add `nsw` to a sum operation, or use byte-stride source/output GEPs; each must remain untransformed and verifier-clean.
++Run `tools/verify.ps1 Launch`, `Doctor`, `Drive`, `Evidence`, `Cleanup` from PowerShell 7. The maintained `tools/check-stencil.py` CPU subset checks positive and commuted shapes plus wrong contracts, geometry, missing/wrong tid, weak input/output alignment, alias/read/write attributes, function `nosync`, restricted memory effects, explicit unknown memory effects, volatile and atomic accesses, flagged sums/index, missing/duplicate/extra offsets and loads, shifted output, byte GEPs, additional arithmetic/store/call/fence and offsets before zext. Rejected output must match the LLVM-canonicalized original body. Accepted IR passes the verifier and LLVM 23.1.4 NVPTX sm_120 lowering, with exactly three global load sites, 2R shared neighbor reads, four stores, and one barrier.
++
++Drive uses the fixed-mode native runner for all radii at 1, 3 and 17 CTAs, comparing both sides against the independent uint32 oracle `sum(input[i..i+2R]) mod 2^32`. It poisons output and includes ordinary values, seeded full-bit random data, distinct halos and overflow-heavy values. Cleanup preserves every run artifact and its recursive hash manifest.
++
++The new extension requires fresh native evidence; historical native results cover only radius 1. CPU-only verifier/PTX success does not establish GPU correctness.
++
++## Performance and historical evidence
+ 
+-## Gotchas
++Keep the frozen `tools/benchmark.ps1` campaign and historical summaries untouched. A separate `tools/benchmark-stencils.ps1` campaign covers radii 1/4/8/16 at the same 16,384 / 524,288 / 4,194,304 / 16,777,216 output sizes, seven alternating repeats per side and 64 launches per CUDA-event sample. Both sides use `llc -O3 -mcpu=sm_120` PTX and the same `nvcc -O2` Release host. Source, binary and PTX hashes are retained; Prepare rejects an existing campaign and Measure preserves existing logs.
+ 
+-For the frozen larger workload, build the current runner, then run `tools/benchmark.ps1 Prepare`, `Smoke`, and `Measure` in an exclusive GPU slot. Measure uses 128, 4096, 32768, and 131072 CTAs, seven alternating samples per side and 64 launches per sample. Every sample checks poisoned output against the independent CPU oracle. Retain the raw logs. CUDA events exclude allocation, JIT, input transfer and correctness readback. Host batch time includes event overhead. Effective bandwidth counts logical input plus output bytes and does not measure DRAM traffic. Occupancy is the CUDA theoretical occupancy API result, not achieved occupancy. Use a separate profiler run before attributing a measured gap to a hardware limiter.
++CUDA-event batches use resident arrays, exclude allocation, transfer and readback, and may include host submission gaps. `host_batch_us_per_call` includes event overhead and is not an end-to-end transaction. Separate `transaction` rows time warm-context allocation + H2D + output poisoning + one kernel + synchronization + D2H + free; their independent CPU oracle comparison is outside the host timer. Context creation, module load/JIT and host-vector allocation are outside that warm application scope. Every timed trial checks the same input and CPU oracle. The new summary parser requires all 224 event samples and 224 transaction samples, finite positive times, seven distinct alternating repeats and no failures.
+ 
+-The runner now enables host `nvcc -O2` and records its flags and binary hash alongside the separately `llc -O3` device PTX. Launch, Prepare, Smoke and the identical frozen-input Measure passed in the coordinated slot on 22 October 2026, followed by the matched old/new PTX check. `docs/evidence/p20/metrics-release-summary.json` retains all samples and build/source/raw hashes. Existing `metrics-summary.json` retains the earlier unoptimized host-runner limitation. Even Release-host event spans can include host submission gaps and do not establish isolated hardware throughput. The center-load cleanup improves only the matched 4M case beyond full range overlap (24.7775 to22.7785 µs); other cleanup sizes overlap. The tile transform still has no demonstrated advantage over untreated PTX.
++`docs/evidence/p20/metrics-release-summary.json` retains the old radius-1 samples and hashes. The center-SSA cleanup improved the matched 4M old/new case (24.7775 to22.7785 µs), while other cleanup sizes overlap. The shared-tile transform still has no demonstrated overall advantage over untreated PTX. The new radii have no performance claim pending measurement and separate profiling; static instruction counts do not identify a hardware limiter. There is no autotuner.
+ 
+-The 128-thread and halo requirements are host-side launch/allocation preconditions; the pass does not generate a host launcher or add bounds checks. It does not prove arbitrary affine loops, multiple stencils, other element types, or boundary padding. Sum operations carrying `nsw` or `nuw` are rejected because the pass does not copy those poison-generating flags. PTX static load instruction count is 3 both before and after; under the accepted CTA contract, expected dynamic global loads are 384 before and 130 after (128 centers plus two halos). Report GPU timings as observations; synchronization and branch overhead can erase the memory-traffic benefit on small inputs.
++The pass does not support arbitrary affine loops, dynamic radii, multiple stencils, other element types, nonpadded boundaries, inferred allocation bounds, or divergent source kernels.
+diff --git a/.github/workflows/p20-cpu-llvm23.yml b/.github/workflows/p20-cpu-llvm23.yml
+index 03a7f91..2ad5167 100644
+--- a/.github/workflows/p20-cpu-llvm23.yml
++++ b/.github/workflows/p20-cpu-llvm23.yml
+@@ -74,6 +74,8 @@ jobs:
+           llc=/usr/lib/llvm-23/bin/llc
+           optimizer="$PWD/build/ci/bin/shared-memory-opt"
+           mkdir -p build/ci/evidence
++          python3 tools/check-stencil.py --optimizer "$optimizer" \
++            --llvm-bin /usr/lib/llvm-23/bin --evidence build/ci/evidence/stencil-legality
+ 
+           stencil=test/Inputs/P20Stencil.ll
+           "$optimizer" "$stencil" -o build/ci/evidence/stencil.optimized.ll
+diff --git a/README.md b/README.md
+index 23bce2b..e5a996f 100644
+--- a/README.md
++++ b/README.md
+@@ -2,7 +2,7 @@
+ 
+ This project adds two bounded LLVM 23 module transformations to the full-history, MIT-licensed [`llvm-tutor`](https://github.com/banach-space/llvm-tutor) codebase. It is an educational, pattern-specific optimizer rather than a general GPU loop optimizer.
+ 
+-`StencilSharedCachePass` recognizes one exact padded three-point `i32` stencil in a 128-thread NVPTX kernel. It creates a cooperative 130-element address-space-3 tile, conditionally loads the two halos, synchronizes the CTA, and replaces each lane's three global reads with shared-memory reads. The matcher requires the input and output GEPs to use `i32` source element types and leaves unsupported IR unchanged.
++`StencilSharedCachePass` recognizes exact padded `i32` sums with fixed radii 1, 4, 8, or 16 (3, 9, 17, or 33 taps) in a 128-thread NVPTX kernel. It creates a cooperative address-space-3 tile of `128+2R` elements, loads R halos on each side, synchronizes the CTA, and reuses the lane's center SSA value plus shared neighbors. The matcher anchors scalar `i32` GEPs on the output index `zext i32(block*128+tid.x) to i64`, requires every offset exactly once and accesses aligned to at least four bytes, and leaves unsupported IR unchanged.
+ 
+ `PrivateSharedSlotPromotionPass` removes one same-lane store/load pair for a `[128 x i32]` address-space-3 slot in an exact 128-thread single-block kernel. It verifies the GEP type matches the slot global and preserves CTA barriers. It rejects cross-thread accesses and unsupported uses.
+ 
+@@ -43,7 +43,9 @@ Event intervals around batches of launches can include gaps from host submission
+ 
+ Reproduce with `tools/benchmark.ps1 Prepare`, `Smoke`, and `Measure` after building the current tools. Retain the first PTX and logs before rebuilding a candidate, then compare the two optimized PTX files with `build/bin/cuda-runner.exe old.ptx new.ptx stencil --benchmark`. Run `python tools/summarize-benchmark.py` to validate and curate both campaigns. Run only in an exclusive GPU slot.
+ 
+-The stencil caller must provide a positive output length divisible by 128, an input pointer to the first interior `i32` with one valid halo element on either side, a separate `noalias` output allocation, and indices within unsigned `i32` range. The pass does not add bounds checks or create a host launcher. Full scope, source provenance, verification results, and limitations are documented in the [P20 implementation record](reports/P20-implementation.md).
++The stencil caller must launch a one-dimensional grid of full `(128,1,1)` CTAs for positive output length N divisible by 128 and `N-1 <= UINT32_MAX`. Input and output must be separate four-byte-aligned arrays; the interior input pointer has R valid halo elements in both directions within the same allocation. The exact contracts and bounded IR shapes are in the [stencil feature map](.agents/skills/verify-gpu-shared-memory-optimizer/features/stencil-tile.md). The pass does not add bounds checks or create a host launcher. Full scope, source provenance, verification results, and limitations are documented in the [P20 implementation record](reports/P20-implementation.md).
++
++The new radius campaign is separate from the historical three-point measurements above: after rebuilding, run `tools/benchmark-stencils.ps1 Prepare`, `Smoke`, and `Measure` in an exclusive GPU slot, then `python tools/summarize-stencils.py`. It uses the same four output sizes, seven alternating repeats and 64 launches per CUDA-event sample for each radius. A separate host timer measures a warm application transaction including allocation, H2D, poisoned output, one kernel, synchronization, D2H and free; CPU oracle work is outside that timer. The radius extension has no new GPU-correctness or performance claim until its native campaign is completed and reviewed. No autotuner is included.
+ 
+ Curated LLVM IR, NVPTX, a local GPU result JSON file, and a valid `align 1` byte-GEP red reproduction are in [`docs/evidence/p20/`](docs/evidence/p20/). The GPU result is a local RTX 5080 Laptop GPU observation; timing results are measurements from one machine and are not general speedup claims. The CMU gallery confirms the project topic, but its linked final report was inaccessible; this implementation does not claim to reproduce that report.
+ 
+diff --git a/include/StencilSharedCache.h b/include/StencilSharedCache.h
+index 325bc67..e705d2e 100644
+--- a/include/StencilSharedCache.h
++++ b/include/StencilSharedCache.h
+@@ -3,7 +3,7 @@
+ 
+ #include "llvm/IR/PassManager.h"
+ 
+-// Caches a validated, one-dimensional three-point stencil tile in CTA shared
++// Caches a validated, fixed-radius i32 stencil tile in CTA shared
+ // memory. The accepted launch/padding contract is documented in the feature map.
+ class StencilSharedCachePass
+     : public llvm::PassInfoMixin<StencilSharedCachePass> {
+diff --git a/lib/StencilSharedCache.cpp b/lib/StencilSharedCache.cpp
+index a6da2d2..b1ff7e3 100644
+--- a/lib/StencilSharedCache.cpp
++++ b/lib/StencilSharedCache.cpp
+@@ -1,12 +1,12 @@
+ #include "StencilSharedCache.h"
+ 
++#include "llvm/ADT/STLExtras.h"
+ #include "llvm/IR/Attributes.h"
+ #include "llvm/IR/Constants.h"
+ #include "llvm/IR/DerivedTypes.h"
+ #include "llvm/IR/IRBuilder.h"
+ #include "llvm/IR/Instructions.h"
+ #include "llvm/IR/Module.h"
+-#include "llvm/ADT/STLExtras.h"
+ #include "llvm/Support/raw_ostream.h"
+ 
+ #include <set>
+@@ -14,13 +14,23 @@
+ using namespace llvm;
+ 
+ namespace {
+-constexpr StringLiteral Contract =
+-    "one-dimensional-padded-i32-3point;128-threads;multiple-of-128-elements;index-fits-u32";
++unsigned contractRadius(StringRef Contract) {
++  if (Contract == "one-dimensional-padded-i32-3point;128-threads;multiple-of-128-elements;index-fits-u32")
++    return 1;
++  if (Contract == "one-dimensional-padded-i32-9point;128-threads;multiple-of-128-elements;index-fits-u32")
++    return 4;
++  if (Contract == "one-dimensional-padded-i32-17point;128-threads;multiple-of-128-elements;index-fits-u32")
++    return 8;
++  if (Contract == "one-dimensional-padded-i32-33point;128-threads;multiple-of-128-elements;index-fits-u32")
++    return 16;
++  return 0;
++}
+ 
+ bool isCallNamed(Value *V, StringRef Name) {
+-  auto *CB = dyn_cast<CallBase>(V);
+-  Function *Callee = CB ? CB->getCalledFunction() : nullptr;
+-  return Callee && Callee->getName() == Name;
++  auto *CI = dyn_cast<CallInst>(V);
++  Function *Callee = CI ? CI->getCalledFunction() : nullptr;
++  return Callee && Callee->getName() == Name && CI->arg_empty() &&
++         !CI->hasOperandBundles() && CI->getType()->isIntegerTy(32);
+ }
+ 
+ bool isConstant(Value *V, int64_t N) {
+@@ -30,36 +40,39 @@ bool isConstant(Value *V, int64_t N) {
+ 
+ bool isIndexOffset(Value *V, Value *Base, int Offset) {
+   auto *BO = dyn_cast<BinaryOperator>(V);
+-  if (!BO)
++  if (!BO || !BO->getType()->isIntegerTy(64) || BO->hasPoisonGeneratingFlags())
+     return false;
+-  if (Offset == -1)
+-    return BO->getOpcode() == Instruction::Sub &&
+-           BO->getOperand(0) == Base && isConstant(BO->getOperand(1), 1);
++  if (Offset < 0 && BO->getOpcode() == Instruction::Sub)
++    return BO->getOperand(0) == Base && isConstant(BO->getOperand(1), -Offset);
+   return BO->getOpcode() == Instruction::Add &&
+          ((BO->getOperand(0) == Base && isConstant(BO->getOperand(1), Offset)) ||
+           (BO->getOperand(1) == Base && isConstant(BO->getOperand(0), Offset)));
+ }
+ 
+-bool collectLoads(Value *V, SmallVectorImpl<LoadInst *> &Found) {
++bool collectLoads(Value *V, SmallVectorImpl<LoadInst *> &Found,
++                  std::set<Instruction *> &Matched) {
+   if (auto *LI = dyn_cast<LoadInst>(V)) {
+     Found.push_back(LI);
++    Matched.insert(LI);
+     return true;
+   }
+   auto *BO = dyn_cast<BinaryOperator>(V);
+-  if (!BO || BO->getOpcode() != Instruction::Add || BO->hasNoSignedWrap() ||
+-      BO->hasNoUnsignedWrap())
++  if (!BO || BO->getOpcode() != Instruction::Add ||
++      !BO->getType()->isIntegerTy(32) || BO->hasPoisonGeneratingFlags())
+     return false;
+-  return collectLoads(BO->getOperand(0), Found) &&
+-         collectLoads(BO->getOperand(1), Found);
++  Matched.insert(BO);
++  return collectLoads(BO->getOperand(0), Found, Matched) &&
++         collectLoads(BO->getOperand(1), Found, Matched);
+ }
+ 
+ bool isSupported(Function &F, Argument *&Input, Argument *&Output,
+-                 Value *&GlobalIndex, Value *&Lane,
+-                 SmallVectorImpl<LoadInst *> &Loads) {
+-  if (F.isDeclaration() || F.size() != 1 || F.arg_size() != 2 ||
++                 unsigned Radius) {
++  if (!Radius || F.isDeclaration() || F.size() != 1 || F.arg_size() != 2 ||
++      F.isVarArg() || !F.getReturnType()->isVoidTy() ||
+       F.getCallingConv() != CallingConv::PTX_Kernel ||
++      F.hasFnAttribute(Attribute::NoSync) ||
++      F.getMemoryEffects() != MemoryEffects::unknown() ||
+       F.getFnAttribute("nvvm.reqntid").getValueAsString() != "128,1,1" ||
+-      F.getFnAttribute("p20.stencil-contract").getValueAsString() != Contract ||
+       !F.getArg(0)->getType()->isPointerTy() ||
+       !F.getArg(1)->getType()->isPointerTy() ||
+       cast<PointerType>(F.getArg(0)->getType())->getAddressSpace() != 1 ||
+@@ -72,104 +85,94 @@ bool isSupported(Function &F, Argument *&Input, Argument *&Output,
+   Input = F.getArg(0);
+   Output = F.getArg(1);
+ 
+-  Value *Tid = nullptr;
+-  Value *Cta = nullptr;
++  Value *Tid = nullptr, *Cta = nullptr;
+   StoreInst *OutputStore = nullptr;
++  SmallVector<LoadInst *, 33> Loads;
++  std::set<Instruction *> Matched;
+   for (Instruction &I : F.front()) {
+-    if (auto *CB = dyn_cast<CallBase>(&I)) {
+-      if (isCallNamed(CB, "llvm.nvvm.read.ptx.sreg.tid.x"))
+-        Tid = CB;
+-      else if (isCallNamed(CB, "llvm.nvvm.read.ptx.sreg.ctaid.x"))
+-        Cta = CB;
++    if (isa<CallBase>(I)) {
++      if (!Tid && isCallNamed(&I, "llvm.nvvm.read.ptx.sreg.tid.x"))
++        Tid = &I;
++      else if (!Cta && isCallNamed(&I, "llvm.nvvm.read.ptx.sreg.ctaid.x"))
++        Cta = &I;
+       else
+         return false;
++      Matched.insert(&I);
+     } else if (auto *LI = dyn_cast<LoadInst>(&I)) {
+-      if (LI->getType()->isIntegerTy(32) &&
+-          LI->getPointerAddressSpace() == 1 && !LI->isVolatile() &&
+-          !LI->isAtomic())
+-        Loads.push_back(LI);
+-      else
++      if (!LI->getType()->isIntegerTy(32) || LI->getPointerAddressSpace() != 1 ||
++          LI->isVolatile() || LI->isAtomic() || LI->getAlign() < Align(4))
+         return false;
++      Loads.push_back(LI);
+     } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
+       if (OutputStore || SI->getPointerAddressSpace() != 1 ||
+-          SI->isVolatile() || SI->isAtomic())
++          SI->isVolatile() || SI->isAtomic() || SI->getAlign() < Align(4))
+         return false;
+       OutputStore = SI;
+-    } else if (isa<GetElementPtrInst>(I) || isa<ZExtInst>(I) ||
+-               isa<BinaryOperator>(I) || isa<ReturnInst>(I)) {
+-      continue;
+-    } else {
++      Matched.insert(SI);
++    } else if (auto *RI = dyn_cast<ReturnInst>(&I)) {
++      if (RI->getReturnValue())
++        return false;
++      Matched.insert(RI);
++    } else if (!isa<GetElementPtrInst>(I) && !isa<ZExtInst>(I) &&
++               !isa<BinaryOperator>(I)) {
+       return false;
+     }
+   }
+-  if (!Tid || !Cta || Loads.size() != 3 || !OutputStore ||
++  if (!Tid || !Cta || Loads.size() != 2 * Radius + 1 || !OutputStore ||
+       !OutputStore->getValueOperand()->getType()->isIntegerTy(32))
+     return false;
+ 
+-  // The three source loads must address idx-1, idx, idx+1 from one affine
+-  // block/lane index, and the output must be the sum of exactly those loads.
+-  SmallVector<LoadInst *, 3> SumLoads;
+-  if (!collectLoads(OutputStore->getValueOperand(), SumLoads) ||
+-      SumLoads.size() != 3 ||
++  // Anchor every source offset on the output's actual block-plus-lane index.
++  auto *OutGEP = dyn_cast<GetElementPtrInst>(OutputStore->getPointerOperand());
++  if (!OutGEP || OutGEP->getPointerOperand() != Output ||
++      OutGEP->getNumIndices() != 1 ||
++      !OutGEP->getSourceElementType()->isIntegerTy(32))
++    return false;
++  Value *Base = OutGEP->idx_end()[-1];
++  auto *Z = dyn_cast<ZExtInst>(Base);
++  auto *Index = Z ? dyn_cast<BinaryOperator>(Z->getOperand(0)) : nullptr;
++  if (!Z || !Z->getType()->isIntegerTy(64) || Z->hasPoisonGeneratingFlags() ||
++      !Index || !Index->getType()->isIntegerTy(32) ||
++      Index->getOpcode() != Instruction::Add || Index->hasPoisonGeneratingFlags())
++    return false;
++  Value *BlockBase = nullptr;
++  if (Index->getOperand(0) == Tid)
++    BlockBase = Index->getOperand(1);
++  else if (Index->getOperand(1) == Tid)
++    BlockBase = Index->getOperand(0);
++  auto *Mul = dyn_cast_or_null<BinaryOperator>(BlockBase);
++  if (!Mul || Mul->getOpcode() != Instruction::Mul || Mul->hasPoisonGeneratingFlags() ||
++      !((Mul->getOperand(0) == Cta && isConstant(Mul->getOperand(1), 128)) ||
++        (Mul->getOperand(1) == Cta && isConstant(Mul->getOperand(0), 128))))
++    return false;
++  Matched.insert({OutGEP, Z, Index, Mul});
++
++  SmallVector<LoadInst *, 33> SumLoads;
++  if (!collectLoads(OutputStore->getValueOperand(), SumLoads, Matched) ||
++      SumLoads.size() != Loads.size() ||
+       !llvm::all_of(Loads, [&](LoadInst *LI) {
+         return llvm::count(SumLoads, LI) == 1;
+       }))
+     return false;
+-
+-  auto getInputIndex = [&](LoadInst *LI) -> Value * {
+-    auto *GEP = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
+-    if (!GEP || GEP->getPointerOperand() != Input || GEP->getNumIndices() != 1)
+-      return nullptr;
+-    if (!GEP->getSourceElementType()->isIntegerTy(32))
+-      return nullptr;
+-    return GEP->idx_end()[-1];
+-  };
+-  Value *Base = nullptr;
++  std::set<int> Offsets;
+   for (LoadInst *LI : Loads) {
+-    Value *Index = getInputIndex(LI);
+-    if (!Index)
++    auto *GEP = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
++    if (!GEP || GEP->getPointerOperand() != Input || GEP->getNumIndices() != 1 ||
++        !GEP->getSourceElementType()->isIntegerTy(32))
+       return false;
+-    auto *Z = dyn_cast<ZExtInst>(Index);
+-    if (Z && !isIndexOffset(Index, nullptr, 0)) {
+-      auto *BO = dyn_cast<BinaryOperator>(Z->getOperand(0));
+-      if (BO && BO->getOpcode() == Instruction::Add) {
+-        for (Value *Operand : {BO->getOperand(0), BO->getOperand(1)}) {
+-          if (Operand != Tid && Base == nullptr) {
+-            auto *Mul = dyn_cast<BinaryOperator>(Operand);
+-            if (Mul && Mul->getOpcode() == Instruction::Mul &&
+-                ((Mul->getOperand(0) == Cta && isConstant(Mul->getOperand(1), 128)) ||
+-                 (Mul->getOperand(1) == Cta && isConstant(Mul->getOperand(0), 128))))
+-              Base = Index;
+-          }
+-        }
+-      }
+-    }
+-  }
+-  if (!Base)
+-    return false;
+-  unsigned Direct = 0, Left = 0, Right = 0;
+-  for (LoadInst *LI : Loads) {
+-    Value *Index = getInputIndex(LI);
+-    if (Index == Base)
+-      ++Direct;
+-    else if (isIndexOffset(Index, Base, -1))
+-      ++Left;
+-    else if (isIndexOffset(Index, Base, 1))
+-      ++Right;
+-    else
++    Value *SourceIndex = GEP->idx_end()[-1];
++    int Offset = -static_cast<int>(Radius);
++    for (; Offset <= static_cast<int>(Radius); ++Offset)
++      if ((Offset == 0 && SourceIndex == Base) ||
++          (Offset != 0 && isIndexOffset(SourceIndex, Base, Offset)))
++        break;
++    if (Offset > static_cast<int>(Radius) || !Offsets.insert(Offset).second)
+       return false;
++    Matched.insert(GEP);
++    if (SourceIndex != Base)
++      Matched.insert(cast<Instruction>(SourceIndex));
+   }
+-  if (Direct != 1 || Left != 1 || Right != 1)
+-    return false;
+-  auto *OutGEP = dyn_cast<GetElementPtrInst>(OutputStore->getPointerOperand());
+-  if (!OutGEP || OutGEP->getPointerOperand() != Output ||
+-      OutGEP->getNumIndices() != 1 ||
+-      !OutGEP->getSourceElementType()->isIntegerTy(32) ||
+-      OutGEP->idx_end()[-1] != Base)
+-    return false;
+-  GlobalIndex = Base;
+-  Lane = Tid;
+-  return true;
++  return llvm::all_of(F.front(), [&](Instruction &I) { return Matched.count(&I); });
+ }
+ } // namespace
+ 
+@@ -180,16 +183,15 @@ PreservedAnalyses StencilSharedCachePass::run(Module &M,
+     if (!F.hasFnAttribute("p20.stencil-contract"))
+       continue;
+     Argument *Input = nullptr, *Output = nullptr;
+-    Value *OldIndex = nullptr, *Lane = nullptr;
+-    SmallVector<LoadInst *, 3> OldLoads;
+-    if (!isSupported(F, Input, Output, OldIndex, Lane, OldLoads)) {
++    unsigned Radius = contractRadius(F.getFnAttribute("p20.stencil-contract").getValueAsString());
++    if (!isSupported(F, Input, Output, Radius)) {
+       errs() << "p20-stencil-cache: rejected unsupported shape in "
+              << F.getName() << "\n";
+       continue;
+     }
+     auto *I32 = Type::getInt32Ty(M.getContext());
+     auto *I64 = Type::getInt64Ty(M.getContext());
+-    auto *TileTy = ArrayType::get(I32, 130);
++    auto *TileTy = ArrayType::get(I32, 128 + 2 * Radius);
+     std::string TileName = ("p20.tile." + F.getName()).str();
+     if (M.getNamedValue(TileName)) {
+       errs() << "p20-stencil-cache: rejected duplicate tile symbol " << TileName
+@@ -226,42 +228,43 @@ PreservedAnalyses StencilSharedCachePass::run(Module &M,
+     Value *CenterPtr = B.CreateInBoundsGEP(I32, Input, Base64, "center.ptr");
+     Value *Center = B.CreateLoad(I32, CenterPtr, "center");
+     Value *CenterSlot = B.CreateInBoundsGEP(TileTy, Tile,
+-        {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(1))}, "center.slot");
++        {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(Radius))}, "center.slot");
+     B.CreateStore(Center, CenterSlot);
+-    B.CreateCondBr(B.CreateICmpEQ(Tid, B.getInt32(0)), LoadLeft, CheckRight);
++    B.CreateCondBr(B.CreateICmpULT(Tid, B.getInt32(Radius)), LoadLeft, CheckRight);
+ 
+     B.SetInsertPoint(LoadLeft);
+-    Value *LeftIndex64 = B.CreateSub(Base64, B.getInt64(1));
++    Value *LeftIndex64 = B.CreateSub(Base64, B.getInt64(Radius));
+     Value *LeftPtr = B.CreateInBoundsGEP(I32, Input, LeftIndex64);
+     Value *Left = B.CreateLoad(I32, LeftPtr, "left.halo.value");
+     B.CreateStore(Left, B.CreateInBoundsGEP(TileTy, Tile,
+-        {B.getInt64(0), B.getInt64(0)}));
++        {B.getInt64(0), Lane64}));
+     B.CreateBr(CheckRight);
+ 
+     B.SetInsertPoint(CheckRight);
+-    B.CreateCondBr(B.CreateICmpEQ(Tid, B.getInt32(127)), LoadRight, Join);
++    B.CreateCondBr(B.CreateICmpUGE(Tid, B.getInt32(128 - Radius)), LoadRight, Join);
+ 
+     B.SetInsertPoint(LoadRight);
+-    Value *RightIndex64 = B.CreateAdd(Base64, B.getInt64(1));
++    Value *RightIndex64 = B.CreateAdd(Base64, B.getInt64(Radius));
+     Value *RightPtr = B.CreateInBoundsGEP(I32, Input, RightIndex64);
+     Value *Right = B.CreateLoad(I32, RightPtr, "right.halo.value");
+     B.CreateStore(Right, B.CreateInBoundsGEP(TileTy, Tile,
+-        {B.getInt64(0), B.getInt64(129)}));
++        {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(2 * Radius))}));
+     B.CreateBr(Join);
+ 
+     B.SetInsertPoint(Join);
+     B.CreateCall(BarrierFn, {B.getInt32(0)});
+-    Value *LeftSlot = B.CreateInBoundsGEP(TileTy, Tile,
+-        {B.getInt64(0), Lane64});
+-    Value *RightSlot = B.CreateInBoundsGEP(TileTy, Tile,
+-        {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(2))});
+-    Value *LV = B.CreateLoad(I32, LeftSlot, "cached.left");
+-    Value *RV = B.CreateLoad(I32, RightSlot, "cached.right");
+-    Value *Sum = B.CreateAdd(B.CreateAdd(LV, Center), RV, "stencil.sum");
++    Value *Sum = Center;
++    for (int D = -static_cast<int>(Radius); D <= static_cast<int>(Radius); ++D) {
++      if (D == 0)
++        continue;
++      Value *Slot = B.CreateInBoundsGEP(TileTy, Tile,
++          {B.getInt64(0), B.CreateAdd(Lane64, B.getInt64(static_cast<int>(Radius) + D))});
++      Sum = B.CreateAdd(Sum, B.CreateLoad(I32, Slot, "cached.neighbor"), "stencil.sum");
++    }
+     B.CreateStore(Sum, B.CreateInBoundsGEP(I32, Output, Base64));
+     B.CreateRetVoid();
+-    errs() << "p20-stencil-cache: cached a 128-lane stencil tile in "
+-           << F.getName() << "\n";
++    errs() << "p20-stencil-cache: cached a 128-lane stencil tile radius=" << Radius
++           << " in " << F.getName() << "\n";
+     Changed = true;
+   }
+   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+diff --git a/reports/P20-implementation.md b/reports/P20-implementation.md
+index 9b7ea0a..816a468 100644
+--- a/reports/P20-implementation.md
++++ b/reports/P20-implementation.md
+@@ -1,5 +1,27 @@
+ # P20 implementation and verification record
+ 
++## Function-attribute legality correction, 24 October 2026
++
++The radius-1/4/8/16 matcher previously ignored function-level `nosync` and memory-effect attributes while replacing the body with a barrier and shared-memory accesses. The valid red reproduction at `orchestration/p20-function-attributes-red.ll` has both `nosync` and `memory(argmem: readwrite)`; the old pass transformed it while preserving those incompatible attributes. Its transformed output is `orchestration/p20-function-attributes-transformed-red.ll`. The cause is confirmed in `isSupported`: the prior precondition checked argument attributes but neither `NoSync` nor function memory effects.
++
++The matcher now rejects `nosync` and every function memory-effect summary other than unknown before rewriting. The maintained CPU checker generates both negative variants for all four radii and requires LLVM-canonicalized unchanged output. `memory(readwrite)` is explicitly tested as accepted unknown effects. The fresh green run at `evidence/verification/function-attributes-20261024/stencil-legality/` passed 132 legality, LLVM verifier and NVPTX PTX cases; the runner's CPU-only `--self-test` passed. This establishes the bounded function-attribute behavior and CPU/PTX checks only, not GPU execution or performance.
++
++## Fixed-radius extension, 24 October 2026
++
++The current stencil matcher supports only exact dense radii 1, 4, 8 and 16 with separate 3/9/17/33-point contract strings and fixtures. It matches the scalar i32 output GEP first, proves its index is `zext i32(ctaid.x*128+actual tid.x) to i64` (commuted add/multiply allowed), and requires exactly one aligned, ordinary i32 input load at every i64 offset [-R,R], an unflagged modulo-32-bit add tree using each load once, and one output store. A matched-instruction whitelist rejects extra operations and effects. All original function/launch/noalias/read/write preconditions remain required; input and output accesses below four-byte alignment are rejected.
++
++The generalized builder uses `128+2R` shared elements. All lanes store center at t+R and retain its SSA value; the first R lanes fill slots [0,R) from g-R, the last R lanes fill [128+R,128+2R) from g+R, and all converge at one unconditional barrier. The result uses center plus 2R shared neighbor reads and ordinary i32 adds. The host promises a 1D full-CTA launch, positive N divisible by 128, `N-1 <= UINT32_MAX`, separate four-byte-aligned arrays, and R valid input halo elements on both sides within the same allocation. The pass does not infer or check those host facts.
++
++Before rebuilding, the existing optimizer accepted both `P20StencilMissingTid.ll` (index omits tid.x) and `P20StencilWeakAlignment.ll` (align 1). The first exposed a structural acceptance bug: the old matcher found a block multiply but never required the actual lane operand. The second exposed an alignment-proof gap: it reconstructed align-4 accesses from accepted align-1 IR. These are confirmed acceptance/rewrite defects, not claims of a native GPU miscompile. Old and new raw IR, optimizer diagnostics, old binaries/source snapshots and hashes are retained in `evidence/shape-legality-red/`; compact review artifacts are in `docs/evidence/p20/red-shape-legality/`. The new binary rejects both fixtures unchanged. The earlier byte-GEP red evidence and frozen performance evidence remain intact.
++
++In the granted CPU build slot, `pwsh -NoProfile -File tools/verify.ps1 Launch` succeeded using the maintained MSVC/LLVM 23.1.4 and CUDA 13 nvcc -O2 host route, with LLVM-header C4624 warnings. `python tools/check-stencil.py --optimizer build/bin/shared-memory-opt.exe --llvm-bin <LLVM>/bin --evidence evidence/verification/stencil-cpu-extension` passed 120 cases: eight supported/commuted shapes and 112 unsupported shapes rejected unchanged after canonicalizing both sides with opt. All accepted inputs/outputs passed LLVM verification and llc -O3 sm_120 lowering. The runner's CPU-only `--self-test`, both summary-parser self-checks, PowerShell parsing and diff whitespace checks passed. The first test-driver attempt compared opt's inferred target datalayout against the CLI's omitted layout; canonicalizing both sides fixed that harness mismatch without changing product behavior.
++
++The owned CUDA runner retains copy/stencil modes and adds fixed stencil-r4/r8/r16 descriptors. Its independent uint32 oracle defines modulo-32-bit sums without C++ signed overflow. Native correctness covers poisoned outputs, 1/3/17 CTAs, deterministic ordinary values, full-bit random data and distinct overflow-heavy halos. These native extension checks are **pending an exclusive GPU grant**, so the extension is not yet claimed GPU-correct or faster.
++
++The separate maintained `tools/benchmark-stencils.ps1` campaign uses radii 1/4/8/16 at the historical four sizes, seven alternating repeats and 64 resident-array launches per event sample, identical llc -O3 sm_120 device lowering, and nvcc -O2 host code. Separate transaction rows time warm-context allocation, H2D, output poisoning, one launch, synchronization, D2H and free; CPU oracle work, context/module/JIT and host-vector allocation are outside that timer. The old host batch metric excludes allocation/transfers and is not that transaction metric. `tools/summarize-stencils.py` requires all event and transaction dimensions, seven distinct alternating repeats, finite positive timings and successful work/oracles. Prepared inputs, sources, binaries, PTX and raw logs are hashed; existing campaign logs and historical summaries are preserved. No autotuner or broader performance claim is added; hardware profiling remains a separate prerequisite for attributing a limiter.
++
++The default verifier and CPU workflow now drive all radii; the feature map and skill document the exact invocation and evidence lifecycle. The historical sections below describe the original radius-1 implementation and evidence, rather than new extension validation.
++
+ ## Scope and source provenance
+ 
+ The CMU 15-745 Fall 2024 gallery confirms the project topic “Autocaching for GPU Shared Memory Using LLVM” and lists its presenters, but the linked final-report exports returned HTTP 401. This work implements the confirmed topic independently; it does not claim to reproduce or grade against the unavailable student report.
+diff --git a/tools/CudaRunner.cpp b/tools/CudaRunner.cpp
+index f062ddc..77dacdd 100644
+--- a/tools/CudaRunner.cpp
++++ b/tools/CudaRunner.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include <algorithm>
+ #include <chrono>
++#include <cstdint>
+ #include <cmath>
+ #include <fstream>
+ #include <iostream>
+@@ -12,6 +13,67 @@
+ #include <vector>
+ 
+ namespace {
++struct Mode {
++  const char *Name;
++  unsigned Radius;
++  const char *Kernel;
++};
++constexpr Mode Modes[] = {{"copy", 0, "p20_private_slot"},
++                          {"stencil", 1, "p20_stencil"},
++                          {"stencil-r4", 4, "p20_stencil"},
++                          {"stencil-r8", 8, "p20_stencil"},
++                          {"stencil-r16", 16, "p20_stencil"}};
++
++std::vector<uint32_t> oracle(const std::vector<uint32_t> &Input,
++                             unsigned Count, unsigned Radius) {
++  if (Input.size() != Count + 2 * Radius)
++    throw std::runtime_error("CPU oracle input/halo size mismatch");
++  std::vector<uint32_t> Expected(Count);
++  for (unsigned I = 0; I < Count; ++I)
++    for (unsigned D = 0; D <= 2 * Radius; ++D)
++      Expected[I] += Input[I + D];
++  return Expected;
++}
++
++std::vector<uint32_t> makeInput(unsigned Count, unsigned Radius, unsigned Pattern) {
++  std::vector<uint32_t> Input(Count + 2 * Radius);
++  uint32_t State = 0x7193a5cdu;
++  for (size_t I = 0; I < Input.size(); ++I) {
++    if (Pattern == 0)
++      Input[I] = static_cast<uint32_t>(static_cast<int>((I * 7919u) % 200003u) - 100001);
++    else if (Pattern == 1) {
++      State ^= State << 13;
++      State ^= State >> 17;
++      State ^= State << 5;
++      Input[I] = State;
++    } else
++      Input[I] = I % 2 ? 0xffffffffu : 0x80000000u;
++  }
++  if (Pattern == 2)
++    for (unsigned I = 0; I < Radius; ++I) {
++      Input[I] = 0xa1000000u + I * 17;
++      Input[Count + Radius + I] = 0xb2000000u + I * 31;
++    }
++  return Input;
++}
++
++void selfTest() {
++  if (oracle({0xffffffffu, 2, 0x80000000u}, 1, 1) !=
++          std::vector<uint32_t>{0x80000001u} ||
++      oracle({7, 9}, 2, 0) != std::vector<uint32_t>{7, 9})
++    throw std::runtime_error("CPU modulo-i32 oracle self-check failed");
++  for (const Mode &M : Modes) {
++    for (unsigned Pattern = 0; Pattern < 3; ++Pattern) {
++      auto Input = makeInput(128, M.Radius, Pattern);
++      auto Expected = oracle(Input, 128, M.Radius);
++      if (Expected.size() != 128 || (M.Radius && Pattern == 2 &&
++          Input.front() == Input.back()))
++        throw std::runtime_error("CPU fixture self-check failed");
++    }
++  }
++  std::cout << "PASS fixed modes, uint32 wrapping oracle and distinct halos\n";
++}
++
+ void check(CUresult Result, const char *What) {
+   if (Result == CUDA_SUCCESS)
+     return;
+@@ -67,29 +129,62 @@ float measure(CUfunction Kernel, CUdeviceptr Input, CUdeviceptr Output,
+   return Milliseconds / 64.0f;
+ }
+ 
+-std::vector<int> runCase(CUfunction Kernel, CUdeviceptr DeviceBase,
++std::vector<uint32_t> runCase(CUfunction Kernel, CUdeviceptr DeviceBase,
+                          CUdeviceptr Input,
+-                         CUdeviceptr Output, const std::vector<int> &Host,
++                         CUdeviceptr Output, const std::vector<uint32_t> &Host,
+                          unsigned OutputCount, unsigned Blocks) {
+-  check(cuMemcpyHtoD(DeviceBase, Host.data(), Host.size() * sizeof(int)),
++  check(cuMemcpyHtoD(DeviceBase, Host.data(), Host.size() * sizeof(uint32_t)),
+         "copy input to GPU");
++  check(cuMemsetD32(Output, 0xdeadbeef, OutputCount), "poison correctness output");
+   void *Args[] = {&Input, &Output};
+   check(cuLaunchKernel(Kernel, Blocks, 1, 1, 128, 1, 1, 0, nullptr, Args,
+                        nullptr), "launch correctness kernel");
+   check(cuCtxSynchronize(), "wait for correctness kernel");
+-  std::vector<int> Actual(OutputCount);
+-  check(cuMemcpyDtoH(Actual.data(), Output, Actual.size() * sizeof(int)),
++  std::vector<uint32_t> Actual(OutputCount);
++  check(cuMemcpyDtoH(Actual.data(), Output, Actual.size() * sizeof(uint32_t)),
+         "copy output from GPU");
+   return Actual;
+ }
++
++double transaction(CUfunction Kernel, const std::vector<uint32_t> &Input,
++                   unsigned Radius, unsigned Blocks,
++                   std::vector<uint32_t> &Actual) {
++  DeviceBuffer DIn, DOut;
++  auto Start = std::chrono::steady_clock::now();
++  check(cuMemAlloc(&DIn.Value, Input.size() * sizeof(uint32_t)), "transaction allocate input");
++  check(cuMemAlloc(&DOut.Value, Actual.size() * sizeof(uint32_t)), "transaction allocate output");
++  check(cuMemcpyHtoD(DIn.Value, Input.data(), Input.size() * sizeof(uint32_t)), "transaction H2D");
++  check(cuMemsetD32(DOut.Value, 0xdeadbeef, Actual.size()), "transaction poison output");
++  CUdeviceptr KernelInput = DIn.Value + Radius * sizeof(uint32_t);
++  void *Args[] = {&KernelInput, &DOut.Value};
++  check(cuLaunchKernel(Kernel, Blocks, 1, 1, 128, 1, 1, 0, nullptr, Args, nullptr), "transaction launch");
++  check(cuCtxSynchronize(), "transaction synchronize");
++  check(cuMemcpyDtoH(Actual.data(), DOut.Value, Actual.size() * sizeof(uint32_t)), "transaction D2H");
++  check(cuMemFree(DOut.Value), "transaction free output");
++  DOut.Value = 0;
++  check(cuMemFree(DIn.Value), "transaction free input");
++  DIn.Value = 0;
++  return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - Start).count();
++}
+ } // namespace
+ 
+ int main(int Argc, char **Argv) {
++  if (Argc == 2 && std::string(Argv[1]) == "--self-test") {
++    try { selfTest(); } catch (const std::exception &E) {
++      std::cerr << E.what() << '\n';
++      return 1;
++    }
++    return 0;
++  }
+   const bool Benchmark = Argc == 5 && std::string(Argv[4]) == "--benchmark";
+   const bool Smoke = Argc == 5 && std::string(Argv[4]) == "--smoke";
+-  if ((Argc != 4 && !Benchmark && !Smoke) || (std::string(Argv[3]) != "copy" &&
+-                    std::string(Argv[3]) != "stencil")) {
+-    std::cerr << "usage: cuda-runner <original.ptx> <promoted.ptx> <copy|stencil> [--benchmark|--smoke]\n";
++  const Mode *Selected = nullptr;
++  if (Argc >= 4)
++    for (const Mode &M : Modes)
++      if (std::string(Argv[3]) == M.Name)
++        Selected = &M;
++  if ((Argc != 4 && !Benchmark && !Smoke) || !Selected) {
++    std::cerr << "usage: cuda-runner <original.ptx> <promoted.ptx> <copy|stencil|stencil-r4|stencil-r8|stencil-r16> [--benchmark|--smoke]\n";
+     return 2;
+   }
+   try {
+@@ -116,8 +211,8 @@ int main(int Argc, char **Argv) {
+     check(cuModuleLoadData(&Promoted.Value, PromotedText.c_str()),
+           "load promoted PTX");
+     CUfunction OriginalKernel, PromotedKernel;
+-    const bool Stencil = std::string(Argv[3]) == "stencil";
+-    const char *KernelName = Stencil ? "p20_stencil" : "p20_private_slot";
++    const unsigned Radius = Selected->Radius;
++    const char *KernelName = Selected->Kernel;
+     check(cuModuleGetFunction(&OriginalKernel, Original.Value, KernelName),
+           "find original kernel");
+     check(cuModuleGetFunction(&PromotedKernel, Promoted.Value, KernelName),
+@@ -126,23 +221,28 @@ int main(int Argc, char **Argv) {
+     const std::vector<unsigned> Sizes = Benchmark ? std::vector<unsigned>{128, 4096, 32768, 131072} : std::vector<unsigned>{1, 3, 17};
+     for (unsigned Blocks : Sizes) {
+       const unsigned Count = Blocks * 128;
+-      std::vector<int> Input(Count + (Stencil ? 2 : 0));
+-      for (size_t I = 0; I < Input.size(); ++I)
+-        Input[I] = static_cast<int>((I * 7919u) % 200003u) - 100001;
+-      std::vector<int> Expected(Count);
+-      if (Stencil) {
+-        for (unsigned I = 0; I < Count; ++I)
+-          Expected[I] = Input[I] + Input[I + 1] + Input[I + 2];
+-      } else {
+-        std::copy_n(Input.begin(), Count, Expected.begin());
+-      }
++      std::vector<uint32_t> Input = makeInput(Count, Radius, 0);
++      std::vector<uint32_t> Expected = oracle(Input, Count, Radius);
+       DeviceBuffer DIn, DOut;
+-      check(cuMemAlloc(&DIn.Value, Input.size() * sizeof(int)),
++      check(cuMemAlloc(&DIn.Value, Input.size() * sizeof(uint32_t)),
+             "allocate input");
+-      check(cuMemAlloc(&DOut.Value, Count * sizeof(int)),
++      check(cuMemAlloc(&DOut.Value, Count * sizeof(uint32_t)),
+             "allocate output");
+-      CUdeviceptr KernelInput = DIn.Value + (Stencil ? sizeof(int) : 0);
+-      std::cout << "allocation_bytes=" << (Input.size() + Count) * sizeof(int) << '\n';
++      CUdeviceptr KernelInput = DIn.Value + Radius * sizeof(uint32_t);
++      std::cout << "allocation_bytes=" << (Input.size() + Count) * sizeof(uint32_t) << '\n';
++
++      if (!Benchmark) {
++        for (unsigned Pattern = 0; Pattern < 3; ++Pattern) {
++          auto TestInput = makeInput(Count, Radius, Pattern);
++          auto TestExpected = oracle(TestInput, Count, Radius);
++          for (auto Entry : {std::make_pair("original", OriginalKernel), std::make_pair("promoted", PromotedKernel)}) {
++            if (runCase(Entry.second, DIn.Value, KernelInput, DOut.Value, TestInput, Count, Blocks) != TestExpected)
++              throw std::runtime_error("GPU edge-case output differs from independent uint32 CPU oracle");
++            std::cout << "correctness mode=" << Selected->Name << " blocks=" << Blocks << " pattern=" << Pattern
++                      << " side=" << Entry.first << " poisoned=1 oracle=PASS\n";
++          }
++        }
++      }
+ 
+       auto OriginalResult = runCase(OriginalKernel, DIn.Value, KernelInput, DOut.Value,
+                                     Input, Count, Blocks);
+@@ -161,6 +261,11 @@ int main(int Argc, char **Argv) {
+       // Warm both variants, then alternate batches to limit drift bias.
+       (void)runCase(OriginalKernel, DIn.Value, KernelInput, DOut.Value, Input, Count, Blocks);
+       (void)runCase(PromotedKernel, DIn.Value, KernelInput, DOut.Value, Input, Count, Blocks);
++      std::vector<uint32_t> WarmOutput(Count);
++      for (CUfunction Kernel : {OriginalKernel, PromotedKernel}) {
++        (void)transaction(Kernel, Input, Radius, Blocks, WarmOutput);
++        if (WarmOutput != Expected) throw std::runtime_error("warm transaction oracle mismatch");
++      }
+       for (auto Entry : {std::make_pair("original", OriginalKernel), std::make_pair("promoted", PromotedKernel)}) {
+         int ActiveBlocks = 0, Registers = 0, SharedBytes = 0;
+         check(cuOccupancyMaxActiveBlocksPerMultiprocessor(&ActiveBlocks, Entry.second, 128, 0), "read theoretical occupancy");
+@@ -178,14 +283,19 @@ int main(int Argc, char **Argv) {
+           auto StartWall = std::chrono::steady_clock::now();
+           float Ms = measure(Kernel, KernelInput, DOut.Value, Blocks);
+           double WallUs = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - StartWall).count() / 64;
+-          std::vector<int> Actual(Count);
+-          check(cuMemcpyDtoH(Actual.data(), DOut.Value, Count * sizeof(int)), "read timed output");
++          std::vector<uint32_t> Actual(Count);
++          check(cuMemcpyDtoH(Actual.data(), DOut.Value, Count * sizeof(uint32_t)), "read timed output");
+           if (Actual != Expected) throw std::runtime_error("timed output differs from independent CPU oracle");
+           Samples[Side].push_back(Ms * 1000);
+           std::cout << "sample mode=" << Argv[3] << " blocks=" << Blocks << " elements=" << Count << " repeat=" << Round
+                     << " side=" << (Side ? "promoted" : "original") << " event_us=" << Ms * 1000 << " host_batch_us_per_call=" << WallUs
+-                    << " logical_effective_GBps=" << (double(Count) * 2 * sizeof(int)) / (Ms * 1e6)
++                    << " logical_effective_GBps=" << (double(Count) * 2 * sizeof(uint32_t)) / (Ms * 1e6)
+                     << " finished=64 failed=0 oracle=PASS\n";
++          double TransactionUs = transaction(Kernel, Input, Radius, Blocks, Actual);
++          if (Actual != Expected) throw std::runtime_error("transaction output differs from independent CPU oracle");
++          std::cout << "transaction mode=" << Selected->Name << " elements=" << Count << " repeat=" << Round
++                    << " side=" << (Side ? "promoted" : "original") << " host_transaction_us=" << TransactionUs
++                    << " finished=1 failed=0 oracle=PASS\n";
+         }
+       }
+       for (unsigned Side = 0; Side < 2; ++Side) {
+diff --git a/tools/verify.ps1 b/tools/verify.ps1
+index e7e2307..ea37479 100644
+--- a/tools/verify.ps1
++++ b/tools/verify.ps1
+@@ -66,6 +66,7 @@ switch ($Phase) {
+         if ($LASTEXITCODE -ne 0) { throw 'CUDA Driver API runner compilation failed.' }
+         if (-not (Test-Path -LiteralPath $gpuExe) -or -not (Test-Path -LiteralPath $runner)) { throw 'GPU executables were not produced.' }
+         'CUDA host runner: nvcc --std=c++17 -O2; device kernels separately lowered by llc -O3' | Set-Content (Join-Path $bin 'cuda-runner-build.txt')
++        "CudaRunner.cpp SHA256=$((Get-FileHash (Join-Path $repo 'tools/CudaRunner.cpp') -Algorithm SHA256).Hash)" | Add-Content (Join-Path $bin 'cuda-runner-build.txt')
+         Write-Output "Built $exe, $gpuExe, and $runner"
+     }
+     'Doctor' {
+@@ -82,6 +83,8 @@ switch ($Phase) {
+         $gpuOutput = & $nvidiaSmi -L 2>&1 | Out-String
+         if ($LASTEXITCODE -ne 0 -or $gpuOutput -notmatch 'RTX 5080 Laptop GPU') { throw 'Expected RTX 5080 Laptop GPU is not visible.' }
+         Write-Output "Ready: LLVM $version; CUDA 13.0; RTX 5080 Laptop GPU; $exe"
++        & $runner --self-test
++        if ($LASTEXITCODE -ne 0) { throw 'CUDA runner CPU self-check failed.' }
+     }
+     'Drive' {
+         $exe = Join-Path $bin 'static.exe'
+@@ -103,6 +106,14 @@ switch ($Phase) {
+             if ($output -notmatch $pattern) { throw "Expected direct-call count missing ($pattern); see $runDir" }
+         }
+         $gpuInput = Join-Path $repo 'test\Inputs\P20Stencil.ll'
++        & python (Join-Path $repo 'tools/check-stencil.py') --optimizer $gpuExe --llvm-bin $llvmBin --evidence (Join-Path $runDir 'stencil-legality')
++        if ($LASTEXITCODE -ne 0) { throw 'Fixed-radius CPU legality/verifier/PTX checks failed.' }
++        foreach ($radius in @(4, 8, 16)) {
++            $radiusStem = Join-Path $runDir "stencil-legality/r$radius-positive"
++            $radiusCuda = & $runner "$radiusStem.original.ptx" "$radiusStem.optimized.ptx" "stencil-r$radius" --smoke 2>&1 | Out-String
++            $radiusCuda | Set-Content (Join-Path $runDir "stencil-r$radius-cuda.log") -Encoding utf8
++            if ($LASTEXITCODE -ne 0) { throw "Radius $radius native CUDA oracle failed: $radiusCuda" }
++        }
+         $gpuOutput = Join-Path $runDir 'stencil.optimized.ll'
+         $passLog = & $gpuExe $gpuInput -o $gpuOutput 2>&1 | Out-String
+         if ($LASTEXITCODE -ne 0) { throw "Stencil optimizer failed; $passLog" }
+@@ -191,6 +202,8 @@ switch ($Phase) {
+             @{ Name = 'volatile-load'; Text = $stencilText.Replace('%left = load i32,', '%left = load volatile i32,') },
+             @{ Name = 'possibly-aliasing'; Text = $stencilText.Replace('noalias readonly', 'readonly').Replace('noalias writeonly', 'writeonly') },
+             @{ Name = 'overflow-flags'; Text = $stencilText.Replace('%partial = add i32', '%partial = add nsw i32') },
++            @{ Name = 'missing-tid'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilMissingTid.ll') -Raw },
++            @{ Name = 'weak-alignment'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilWeakAlignment.ll') -Raw },
+             @{ Name = 'byte-input-gep'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilByteInputGep.ll') -Raw },
+             @{ Name = 'byte-output-gep'; Text = Get-Content -LiteralPath (Join-Path $repo 'test\Inputs\P20StencilByteOutputGep.ll') -Raw }
+         )
+@@ -220,11 +233,14 @@ switch ($Phase) {
+     'Evidence' {
+         if (-not (Test-Path -LiteralPath $activeRun)) { throw 'Run Drive first; no active evidence run is recorded.' }
+         $runDir = (Get-Content -LiteralPath $activeRun -Raw).Trim()
+-        foreach ($name in @('action.txt', 'output.log', 'optimizer.log', 'stencil.original.ptx', 'stencil.optimized.ptx', 'cuda-results.log', 'private.optimized.ptx', 'private-cuda-results.log', 'negative.log', 'private-byte-gep.log', 'wrong-geometry.log', 'volatile-load.log', 'possibly-aliasing.log', 'overflow-flags.log', 'byte-input-gep.log', 'byte-output-gep.log')) {
++        foreach ($name in @('action.txt', 'output.log', 'optimizer.log', 'stencil.original.ptx', 'stencil.optimized.ptx', 'cuda-results.log', 'private.optimized.ptx', 'private-cuda-results.log', 'negative.log', 'private-byte-gep.log', 'wrong-geometry.log', 'volatile-load.log', 'possibly-aliasing.log', 'overflow-flags.log', 'byte-input-gep.log', 'byte-output-gep.log', 'missing-tid.log', 'weak-alignment.log')) {
+             if (-not (Test-Path -LiteralPath (Join-Path $runDir $name))) { throw "Evidence is incomplete: $name" }
+         }
+         $manifest = Join-Path $runDir 'sha256.txt'
+-        Get-ChildItem -LiteralPath $runDir -File | Where-Object Name -ne 'sha256.txt' | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -LiteralPath $manifest -Encoding ascii
++        foreach ($radius in @(4, 8, 16)) {
++            if (-not (Test-Path (Join-Path $runDir "stencil-r$radius-cuda.log"))) { throw "Missing native radius $radius evidence." }
++        }
++        Get-ChildItem -LiteralPath $runDir -File -Recurse | Where-Object Name -ne 'sha256.txt' | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([IO.Path]::GetRelativePath($runDir, $_.Path))" } | Set-Content -LiteralPath $manifest -Encoding ascii
+         Get-Content -LiteralPath $manifest
+         Get-Content -LiteralPath (Join-Path $runDir 'action.txt')
+         Get-Content -LiteralPath (Join-Path $runDir 'output.log')

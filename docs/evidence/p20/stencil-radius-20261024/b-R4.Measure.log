@@ -1,0 +1,141 @@
+device=NVIDIA GeForce RTX 5080 Laptop GPU driver=13010 sms=60
+allocation_bytes=131104
+blocks=128 original execution complete
+blocks=128 promoted execution complete
+resources side=original registers_per_thread=18 shared_bytes_per_cta=0 theoretical_occupancy=1
+resources side=promoted registers_per_thread=16 shared_bytes_per_cta=544 theoretical_occupancy=1
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=0 side=original event_us=7.544 host_batch_us_per_call=7.92812 logical_effective_GBps=17.3743 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=0 side=original host_transaction_us=64.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=0 side=promoted event_us=5.591 host_batch_us_per_call=5.75 logical_effective_GBps=23.4434 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=0 side=promoted host_transaction_us=64.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=1 side=promoted event_us=6.5405 host_batch_us_per_call=6.675 logical_effective_GBps=20.0401 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=1 side=promoted host_transaction_us=64.7 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=1 side=original event_us=5.4005 host_batch_us_per_call=5.55625 logical_effective_GBps=24.2703 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=1 side=original host_transaction_us=66.5 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=2 side=original event_us=5.64 host_batch_us_per_call=5.77187 logical_effective_GBps=23.2397 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=2 side=original host_transaction_us=64.6 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=2 side=promoted event_us=5.764 host_batch_us_per_call=5.90937 logical_effective_GBps=22.7398 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=2 side=promoted host_transaction_us=65 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=3 side=promoted event_us=5.58 host_batch_us_per_call=5.72656 logical_effective_GBps=23.4896 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=3 side=promoted host_transaction_us=64.7 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=3 side=original event_us=5.353 host_batch_us_per_call=5.50625 logical_effective_GBps=24.4857 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=3 side=original host_transaction_us=60 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=4 side=original event_us=6.4375 host_batch_us_per_call=6.57188 logical_effective_GBps=20.3607 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=4 side=original host_transaction_us=182.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=4 side=promoted event_us=6.212 host_batch_us_per_call=6.35156 logical_effective_GBps=21.0998 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=4 side=promoted host_transaction_us=67.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=5 side=promoted event_us=6.711 host_batch_us_per_call=6.87188 logical_effective_GBps=19.5309 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=5 side=promoted host_transaction_us=65.9 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=5 side=original event_us=5.808 host_batch_us_per_call=5.9625 logical_effective_GBps=22.5675 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=5 side=original host_transaction_us=66 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=6 side=original event_us=5.834 host_batch_us_per_call=5.97187 logical_effective_GBps=22.4669 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=6 side=original host_transaction_us=67.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=128 elements=16384 repeat=6 side=promoted event_us=5.7745 host_batch_us_per_call=5.95 logical_effective_GBps=22.6984 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16384 repeat=6 side=promoted host_transaction_us=65.8 finished=1 failed=0 oracle=PASS
+summary mode=stencil-r4 elements=16384 side=original repeats=7 median_us=5.808 min_us=5.353 max_us=7.544 p95_us=7.544 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+summary mode=stencil-r4 elements=16384 side=promoted repeats=7 median_us=5.7745 min_us=5.58 max_us=6.711 p95_us=6.711 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+allocation_bytes=4194336
+blocks=4096 original execution complete
+blocks=4096 promoted execution complete
+resources side=original registers_per_thread=18 shared_bytes_per_cta=0 theoretical_occupancy=1
+resources side=promoted registers_per_thread=16 shared_bytes_per_cta=544 theoretical_occupancy=1
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=0 side=original event_us=8.0325 host_batch_us_per_call=9.78125 logical_effective_GBps=522.167 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=0 side=original host_transaction_us=869.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=0 side=promoted event_us=8.7525 host_batch_us_per_call=11.6469 logical_effective_GBps=479.212 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=0 side=promoted host_transaction_us=976.9 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=1 side=promoted event_us=8.7365 host_batch_us_per_call=10.5875 logical_effective_GBps=480.09 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=1 side=promoted host_transaction_us=1126.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=1 side=original event_us=22.3525 host_batch_us_per_call=24.1156 logical_effective_GBps=187.644 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=1 side=original host_transaction_us=1018.6 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=2 side=original event_us=9.4285 host_batch_us_per_call=11.1703 logical_effective_GBps=444.854 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=2 side=original host_transaction_us=1063.9 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=2 side=promoted event_us=9.2325 host_batch_us_per_call=12.0406 logical_effective_GBps=454.298 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=2 side=promoted host_transaction_us=1007.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=3 side=promoted event_us=8.193 host_batch_us_per_call=9.96875 logical_effective_GBps=511.937 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=3 side=promoted host_transaction_us=1128 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=3 side=original event_us=8.16 host_batch_us_per_call=9.9125 logical_effective_GBps=514.008 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=3 side=original host_transaction_us=778.6 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=4 side=original event_us=8.837 host_batch_us_per_call=9.04844 logical_effective_GBps=474.63 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=4 side=original host_transaction_us=840.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=4 side=promoted event_us=8.589 host_batch_us_per_call=10.5422 logical_effective_GBps=488.334 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=4 side=promoted host_transaction_us=999.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=5 side=promoted event_us=9.5835 host_batch_us_per_call=12.4187 logical_effective_GBps=437.659 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=5 side=promoted host_transaction_us=957.7 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=5 side=original event_us=9.115 host_batch_us_per_call=11.7438 logical_effective_GBps=460.154 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=5 side=original host_transaction_us=888.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=6 side=original event_us=8.9935 host_batch_us_per_call=10.7391 logical_effective_GBps=466.371 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=6 side=original host_transaction_us=1171.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=4096 elements=524288 repeat=6 side=promoted event_us=8.433 host_batch_us_per_call=10.1922 logical_effective_GBps=497.368 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=524288 repeat=6 side=promoted host_transaction_us=1124.3 finished=1 failed=0 oracle=PASS
+summary mode=stencil-r4 elements=524288 side=original repeats=7 median_us=8.9935 min_us=8.0325 max_us=22.3525 p95_us=22.3525 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+summary mode=stencil-r4 elements=524288 side=promoted repeats=7 median_us=8.7365 min_us=8.193 max_us=9.5835 p95_us=9.5835 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+allocation_bytes=33554464
+blocks=32768 original execution complete
+blocks=32768 promoted execution complete
+resources side=original registers_per_thread=18 shared_bytes_per_cta=0 theoretical_occupancy=1
+resources side=promoted registers_per_thread=16 shared_bytes_per_cta=544 theoretical_occupancy=1
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=0 side=original event_us=21.0725 host_batch_us_per_call=23.0781 logical_effective_GBps=1592.33 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=0 side=original host_transaction_us=3763.4 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=0 side=promoted event_us=30.671 host_batch_us_per_call=35.6047 logical_effective_GBps=1094.01 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=0 side=promoted host_transaction_us=3905.9 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=1 side=promoted event_us=28.9075 host_batch_us_per_call=29.9281 logical_effective_GBps=1160.75 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=1 side=promoted host_transaction_us=3942.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=1 side=original event_us=23.134 host_batch_us_per_call=27.9125 logical_effective_GBps=1450.44 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=1 side=original host_transaction_us=4033.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=2 side=original event_us=21.073 host_batch_us_per_call=23.0656 logical_effective_GBps=1592.29 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=2 side=original host_transaction_us=4370.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=2 side=promoted event_us=31.76 host_batch_us_per_call=34.5297 logical_effective_GBps=1056.5 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=2 side=promoted host_transaction_us=3836.6 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=3 side=promoted event_us=28.945 host_batch_us_per_call=29.9516 logical_effective_GBps=1159.25 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=3 side=promoted host_transaction_us=3899.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=3 side=original event_us=21.178 host_batch_us_per_call=29.9219 logical_effective_GBps=1584.4 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=3 side=original host_transaction_us=3861.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=4 side=original event_us=21.0715 host_batch_us_per_call=22.9891 logical_effective_GBps=1592.41 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=4 side=original host_transaction_us=3816.5 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=4 side=promoted event_us=31.6885 host_batch_us_per_call=36.4766 logical_effective_GBps=1058.88 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=4 side=promoted host_transaction_us=3727.2 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=5 side=promoted event_us=29.05 host_batch_us_per_call=33.6484 logical_effective_GBps=1155.06 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=5 side=promoted host_transaction_us=5366.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=5 side=original event_us=21.024 host_batch_us_per_call=33.9594 logical_effective_GBps=1596.01 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=5 side=original host_transaction_us=5273.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=6 side=original event_us=23.8075 host_batch_us_per_call=83.55 logical_effective_GBps=1409.41 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=6 side=original host_transaction_us=5145 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=32768 elements=4194304 repeat=6 side=promoted event_us=28.9305 host_batch_us_per_call=29.9531 logical_effective_GBps=1159.83 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=4194304 repeat=6 side=promoted host_transaction_us=5288.8 finished=1 failed=0 oracle=PASS
+summary mode=stencil-r4 elements=4194304 side=original repeats=7 median_us=21.073 min_us=21.024 max_us=23.8075 p95_us=23.8075 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+summary mode=stencil-r4 elements=4194304 side=promoted repeats=7 median_us=29.05 min_us=28.9075 max_us=31.76 p95_us=31.76 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+allocation_bytes=134217760
+blocks=131072 original execution complete
+blocks=131072 promoted execution complete
+resources side=original registers_per_thread=18 shared_bytes_per_cta=0 theoretical_occupancy=1
+resources side=promoted registers_per_thread=16 shared_bytes_per_cta=544 theoretical_occupancy=1
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=0 side=original event_us=297.52 host_batch_us_per_call=303.52 logical_effective_GBps=451.122 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=0 side=original host_transaction_us=14980.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=0 side=promoted event_us=272.421 host_batch_us_per_call=275.32 logical_effective_GBps=492.685 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=0 side=promoted host_transaction_us=16755.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=1 side=promoted event_us=269.879 host_batch_us_per_call=274.959 logical_effective_GBps=497.326 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=1 side=promoted host_transaction_us=14757.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=1 side=original event_us=269.361 host_batch_us_per_call=272.292 logical_effective_GBps=498.282 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=1 side=original host_transaction_us=14790.6 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=2 side=original event_us=289.919 host_batch_us_per_call=357.637 logical_effective_GBps=462.949 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=2 side=original host_transaction_us=20468 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=2 side=promoted event_us=311.936 host_batch_us_per_call=317.273 logical_effective_GBps=430.274 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=2 side=promoted host_transaction_us=20285.3 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=3 side=promoted event_us=299.569 host_batch_us_per_call=302.722 logical_effective_GBps=448.037 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=3 side=promoted host_transaction_us=18242 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=3 side=original event_us=270.753 host_batch_us_per_call=274.038 logical_effective_GBps=495.72 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=3 side=original host_transaction_us=17112.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=4 side=original event_us=286.558 host_batch_us_per_call=290.711 logical_effective_GBps=468.379 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=4 side=original host_transaction_us=17876.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=4 side=promoted event_us=198.255 host_batch_us_per_call=200.606 logical_effective_GBps=676.994 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=4 side=promoted host_transaction_us=18037.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=5 side=promoted event_us=196.277 host_batch_us_per_call=200.562 logical_effective_GBps=683.816 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=5 side=promoted host_transaction_us=17590.8 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=5 side=original event_us=177.996 host_batch_us_per_call=179.948 logical_effective_GBps=754.049 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=5 side=original host_transaction_us=16348.1 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=6 side=original event_us=191.665 host_batch_us_per_call=194.428 logical_effective_GBps=700.271 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=6 side=original host_transaction_us=32653.4 finished=1 failed=0 oracle=PASS
+sample mode=stencil-r4 blocks=131072 elements=16777216 repeat=6 side=promoted event_us=180.288 host_batch_us_per_call=182.561 logical_effective_GBps=744.463 finished=64 failed=0 oracle=PASS
+transaction mode=stencil-r4 elements=16777216 repeat=6 side=promoted host_transaction_us=19582.2 finished=1 failed=0 oracle=PASS
+summary mode=stencil-r4 elements=16777216 side=original repeats=7 median_us=270.753 min_us=177.996 max_us=297.52 p95_us=297.52 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
+summary mode=stencil-r4 elements=16777216 side=promoted repeats=7 median_us=269.879 min_us=180.288 max_us=311.936 p95_us=311.936 bandwidth_scope=logical_input_plus_output_not_measured_DRAM
