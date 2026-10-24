@@ -20,7 +20,7 @@ On the configured Windows development machine, run the maintained product verifi
 
 This builds the LLVM IR CLI and CUDA Driver API runner, verifies original and transformed IR, emits NVPTX, checks unsupported cases, and runs both kernels on the locally installed GPU against CPU oracles. See the [verification driver instructions](.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md) for prerequisites and evidence handling.
 
-The [P20 CPU-only CI workflow](.github/workflows/p20-cpu-llvm23.yml) installs a pinned LLVM 23.1.4 package from the [official apt.llvm.org repository](https://apt.llvm.org/), builds the optimizer, verifies the IR transformations and generates NVPTX. It does not run a GPU and provides no GPU-execution or performance claim.
+The [P20 CPU-only CI workflow](.github/workflows/p20-cpu-llvm23.yml) uses the SHA-256-pinned [official LLVM 23.1.4 release SDK](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.4), builds the optimizer, verifies the IR transformations and generates NVPTX. It does not run a GPU and provides no GPU-execution or performance claim. The earlier apt snapshot pin disappeared when that repository advanced to 23.1.5; the release archive preserves the required version.
 
 The Linux build, IR checks, unsupported byte-GEP cases and NVPTX lowering passed in [run 39716593312](https://github.com/STEVVVU/gpu-shared-memory-optimizer/actions/runs/39716593312). GPU execution was checked separately on the local RTX 5080 Laptop GPU.
 

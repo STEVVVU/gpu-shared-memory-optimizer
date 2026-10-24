@@ -18,46 +18,31 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Add the official LLVM apt repository
+      - name: Prepare the pinned official LLVM SDK
         shell: bash
         run: |
           set -euo pipefail
-          key="$RUNNER_TEMP/apt.llvm.org.asc"
-          curl --fail --location --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key --output "$key"
-          fingerprint=$(gpg --show-keys --with-colons "$key" | awk -F: '$1 == "fpr" { print $10; exit }')
-          test "$fingerprint" = 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
-          sudo install -d -m 0755 /etc/apt/keyrings
-          gpg --dearmor --output "$RUNNER_TEMP/apt.llvm.org.gpg" "$key"
-          sudo install -m 0644 "$RUNNER_TEMP/apt.llvm.org.gpg" /etc/apt/keyrings/apt.llvm.org.gpg
-          echo 'deb [signed-by=/etc/apt/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-23 main' \
-            | sudo tee /etc/apt/sources.list.d/llvm23.list >/dev/null
-          sudo apt-get update
-
-      - name: Install pinned LLVM 23.1.4 packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          version='1:23.1.4~++20261020011024+7a941dfb2877-1~exp1~20261020131035.87'
-          for package in llvm-23-dev llvm-23-tools llvm-23; do
-            apt-cache show "$package" | grep -Fqx "Version: $version"
-          done
-          sudo apt-get install --yes \
-            "llvm-23-dev=$version" \
-            "llvm-23-tools=$version" \
-            "llvm-23=$version" \
-            g++
-          test "$(/usr/lib/llvm-23/bin/llvm-config --version)" = 23.1.4
-          /usr/lib/llvm-23/bin/llc --version > "$RUNNER_TEMP/llvm-23-llc-version.txt"
+          archive="$RUNNER_TEMP/LLVM-23.1.4-Linux-X64.tar.zst"
+          curl --fail --location --retry 3 \
+            https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/LLVM-23.1.4-Linux-X64.tar.zst \
+            --output "$archive"
+          echo "efdd1dbd089b99bfcfcde7b8eb1236163f2e88df5a981cca4f783ec9cb5e0378  $archive" | sha256sum --check
+          sdk="$RUNNER_TEMP/llvm-23.1.4"
+          mkdir "$sdk"
+          tar --zstd --extract --file "$archive" --directory "$sdk" --strip-components=1
+          echo "LLVM_HOME=$sdk" >> "$GITHUB_ENV"
+          test "$("$sdk/bin/llvm-config" --version)" = 23.1.4
+          "$sdk/bin/llc" --version > "$RUNNER_TEMP/llvm-23-llc-version.txt"
           grep -Eiq '^[[:space:]]*nvptx64[[:space:]]+-' "$RUNNER_TEMP/llvm-23-llc-version.txt"
 
       - name: Build shared-memory optimizer with llvm-config
         shell: bash
         run: |
           set -euo pipefail
-          read -r -a cxxflags <<< "$(/usr/lib/llvm-23/bin/llvm-config --cxxflags)"
-          read -r -a ldflags <<< "$(/usr/lib/llvm-23/bin/llvm-config --ldflags)"
-          read -r -a llvmlibs <<< "$(/usr/lib/llvm-23/bin/llvm-config --libs core analysis irreader passes support)"
-          read -r -a systemlibs <<< "$(/usr/lib/llvm-23/bin/llvm-config --system-libs)"
+          read -r -a cxxflags <<< "$("$LLVM_HOME/bin/llvm-config" --cxxflags)"
+          read -r -a ldflags <<< "$("$LLVM_HOME/bin/llvm-config" --ldflags)"
+          read -r -a llvmlibs <<< "$("$LLVM_HOME/bin/llvm-config" --libs core analysis irreader passes support)"
+          read -r -a systemlibs <<< "$("$LLVM_HOME/bin/llvm-config" --system-libs)"
           mkdir -p build/ci/bin
           g++ "${cxxflags[@]}" -std=c++17 -Iinclude \
             tools/SharedMemoryMain.cpp \
@@ -70,12 +55,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          opt=/usr/lib/llvm-23/bin/opt
-          llc=/usr/lib/llvm-23/bin/llc
+          opt="$LLVM_HOME/bin/opt"
+          llc="$LLVM_HOME/bin/llc"
           optimizer="$PWD/build/ci/bin/shared-memory-opt"
           mkdir -p build/ci/evidence
           python3 tools/check-stencil.py --optimizer "$optimizer" \
-            --llvm-bin /usr/lib/llvm-23/bin --evidence build/ci/evidence/stencil-legality
+            --llvm-bin "$LLVM_HOME/bin" --evidence build/ci/evidence/stencil-legality
 
           stencil=test/Inputs/P20Stencil.ll
           "$optimizer" "$stencil" -o build/ci/evidence/stencil.optimized.ll
