@@ -29,7 +29,8 @@ jobs:
           echo "efdd1dbd089b99bfcfcde7b8eb1236163f2e88df5a981cca4f783ec9cb5e0378  $archive" | sha256sum --check
           sdk="$RUNNER_TEMP/llvm-23.1.4"
           mkdir "$sdk"
-          tar --zstd --extract --file "$archive" --directory "$sdk" --strip-components=1
+          tar --use-compress-program='zstd --decompress --long=30' \
+            --extract --file "$archive" --directory "$sdk" --strip-components=1
           echo "LLVM_HOME=$sdk" >> "$GITHUB_ENV"
           test "$("$sdk/bin/llvm-config" --version)" = 23.1.4
           "$sdk/bin/llc" --version > "$RUNNER_TEMP/llvm-23-llc-version.txt"
