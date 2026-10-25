@@ -17,6 +17,254 @@ This project adds two bounded LLVM 23 module transformations to the full-history
 
 ## Architecture and execution guide
 
+<!-- execution-flow:start -->
+### Execution flow
+
+Start with the primary path, then expand a detailed workflow. Select a numbered node to see its operation, implementation techniques, and source. Solid arrows show the named control, data, or lifecycle handoff; dotted arrows show error paths. Separate entry points are named in each workflow.
+
+<a id="review-walkthrough"></a>
+
+#### Walk through one concrete example
+
+Run the optimizer CLI on a supported LLVM IR fixture containing the exact radius-4 stencil contract and a private shared slot.
+
+**Trace.** [Parse and verify input IR](#flow-step-parse-verify-input) → [Promote proven private slot](#flow-step-promote-private-slot) → [Match exact stencil shape](#flow-step-match-stencil-contract) → [Build shared tile and halos](#flow-step-build-tile-halo) → [Reuse center and write result](#flow-step-reuse-center-write) → [Verify and write transformed IR](#flow-step-verify-write-output).
+
+**Result and boundary.** After input verification, the CLI tries private-slot promotion before stencil matching, builds the shared tile and halo paths for a supported shape, reuses the center value, verifies the transformed module, and writes IR; unsupported shapes remain unchanged.
+
+<details>
+<summary>Implementation decisions to explain</summary>
+
+**Why require an exact stencil contract and supported scalar shape before rewriting?** The pass only rewrites shapes whose indexing, geometry, and loads match the implemented transformation; conservative rejection leaves unfamiliar IR unchanged.
+
+[Contract-gated exact IR matching](#technique-p20-exact-match) · [Scalar address, index, and flag legality checks](#technique-p20-scalar-index-legality).
+
+**Why reuse the already loaded center SSA value after the barrier?** The center value is already available from the per-lane load, so reusing it avoids issuing another shared-memory read for that term; the other neighborhood positions still require tile loads.
+
+[Center SSA reuse across the tile reads](#technique-p20-center-ssa-reuse).
+
+</details>
+
+#### Primary execution flow
+
+The optimizer driver parses and verifies LLVM IR, tries the private-slot pass, then the stencil pass, verifies the module, and writes it. Independent verification, CUDA oracle, and timing workflows consume emitted IR or PTX; they are not runtime calls from the optimizer.
+
+```mermaid
+flowchart TD
+    n1["1. Parse and verify input IR"]
+    click n1 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-parse-verify-input" "Open step, techniques, and source" _top
+    n2["2. Promote proven private slot"]
+    click n2 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-promote-private-slot" "Open step, techniques, and source" _top
+    n3["3. Match exact stencil shape"]
+    click n3 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-match-stencil-contract" "Open step, techniques, and source" _top
+    n4["4. Build shared tile and halos"]
+    click n4 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-build-tile-halo" "Open step, techniques, and source" _top
+    n5["5. Reuse center and write result"]
+    click n5 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-reuse-center-write" "Open step, techniques, and source" _top
+    n6["6. Verify and write transformed<br/>IR"]
+    click n6 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-verify-write-output" "Open step, techniques, and source" _top
+    n1 -->|"input parses and verifies"| n2
+    n2 -->|"first pass completes, whether changed<br/>or unchanged"| n3
+    n3 -->|"contract and full IR shape supported;<br/>tile name available"| n4
+    n4 -->|"halo branches join at tile.ready after<br/>CTA barrier"| n5
+    n5 -->|"pass manager returns"| n6
+```
+
+**Detailed workflows.** [Optimize LLVM IR](#flow-workflow-optimizer-driver) · [Verify transformed IR and CUDA results](#flow-workflow-verification-and-oracle) · [Measure and summarize CUDA runs](#flow-workflow-benchmark-and-report).
+
+<a id="flow-workflow-optimizer-driver"></a>
+
+<details>
+<summary>Optimize LLVM IR</summary>
+
+CLI path: parse and verify input, run both passes in order, verify and write output. Individual nonmatches leave their input function unchanged.
+
+```mermaid
+flowchart TD
+    n1["1. Parse and verify input IR"]
+    click n1 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-parse-verify-input" "Open step, techniques, and source" _top
+    n2["2. Promote proven private slot"]
+    click n2 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-promote-private-slot" "Open step, techniques, and source" _top
+    n3["3. Match exact stencil shape"]
+    click n3 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-match-stencil-contract" "Open step, techniques, and source" _top
+    n4["4. Build shared tile and halos"]
+    click n4 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-build-tile-halo" "Open step, techniques, and source" _top
+    n5["5. Reuse center and write result"]
+    click n5 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-reuse-center-write" "Open step, techniques, and source" _top
+    n6["6. Verify and write transformed<br/>IR"]
+    click n6 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-verify-write-output" "Open step, techniques, and source" _top
+    n1 -->|"input parses and verifies"| n2
+    n2 -->|"first pass completes, changed or<br/>unchanged"| n3
+    n3 -->|"supported exact shape and available<br/>tile symbol"| n4
+    n4 -->|"halo paths join and synchronize"| n5
+    n5 -->|"both passes complete"| n6
+```
+
+</details>
+
+<a id="flow-workflow-verification-and-oracle"></a>
+
+<details>
+<summary>Verify transformed IR and CUDA results</summary>
+
+The verification script invokes the optimizer and LLVM tools on fixtures, then the CUDA runner compares original and transformed PTX kernels with its CPU oracle. This is a verification workflow, not optimizer runtime behavior.
+
+```mermaid
+flowchart TD
+    n7["7. Check legality, verifier, and<br/>NVPTX"]
+    click n7 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-cpu-legality-nvptx-checks" "Open step, techniques, and source" _top
+    n8["8. Compare GPU results with CPU<br/>oracle"]
+    click n8 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-cuda-oracle-compare" "Open step, techniques, and source" _top
+    n7 -->|"valid original and optimized PTX are<br/>produced for native checks"| n8
+```
+
+</details>
+
+<a id="flow-workflow-benchmark-and-report"></a>
+
+<details>
+<summary>Measure and summarize CUDA runs</summary>
+
+The benchmark script prepares fixed input/PTX modes and runs smoke or benchmark mode; the summarizer consumes complete logs and writes scoped timing statistics. This reporting path is separate from optimization and correctness dispatch.
+
+```mermaid
+flowchart TD
+    n9["9. Measure two timing scopes"]
+    click n9 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-measure-batch-transaction" "Open step, techniques, and source" _top
+    n10["10. Summarize timing evidence"]
+    click n10 href "https://github.com/STEVVVU/gpu-shared-memory-optimizer#flow-step-summarize-evidence" "Open step, techniques, and source" _top
+    n9 -->|"measurement logs supplied as<br/>summarizer inputs"| n10
+```
+
+</details>
+
+#### Steps, techniques, and source
+
+These source traces cover the active scope below. They explain implementation behavior; benchmark results and their limits remain in the measurement sections.
+
+<a id="flow-step-parse-verify-input"></a>
+
+##### 1. Parse and verify input IR
+
+**Component.** tools/SharedMemoryMain.cpp main. The CLI parses the positional LLVM IR file. Parse failure exits 2; verifier failure exits 3 before either pass runs.
+
+**Techniques at this step.** [LLVM IR verification and NVPTX lowering checks](#technique-p20-ir-nvptx-validation).
+
+**Source.** [`tools/SharedMemoryMain.cpp:31`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/SharedMemoryMain.cpp#L31). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-promote-private-slot"></a>
+
+##### 2. Promote proven private slot
+
+**Component.** PrivateSharedSlotPromotionPass::run. The pass accepts only a single lane-indexed i32 shared slot with one store and one load in one 128-thread PTX kernel, with the store dominating the load and no intervening memory write or non-barrier call. It replaces the load with the stored SSA value and erases the memory operations; rejected shapes are left in IR.
+
+**Techniques at this step.** [Promotion of a proven lane-private shared slot](#technique-p20-private-promotion).
+
+**Source.** [`lib/PrivateSharedSlotPromotion.cpp:38`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/lib/PrivateSharedSlotPromotion.cpp#L38). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-match-stencil-contract"></a>
+
+##### 3. Match exact stencil shape
+
+**Component.** StencilSharedCachePass::run and isSupported. The pass maps four exact contract strings to radii 1, 4, 8, or 16, then requires the supported one-block scalar i32 kernel, 128-thread geometry, separate aligned address-space-1 arrays, matching indexed loads and sum, and no extra instructions. An unsupported shape logs rejection and remains unchanged.
+
+**Techniques at this step.** [Contract-gated exact IR matching](#technique-p20-exact-match) · [Scalar address, index, and flag legality checks](#technique-p20-scalar-index-legality).
+
+**Source.** [`lib/StencilSharedCache.cpp:17`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/lib/StencilSharedCache.cpp#L17) · [`lib/StencilSharedCache.cpp:68`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/lib/StencilSharedCache.cpp#L68). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-build-tile-halo"></a>
+
+##### 4. Build shared tile and halos
+
+**Component.** StencilSharedCachePass::run. For a supported function with no conflicting tile symbol, the pass replaces its body with one center load/store per lane and conditional left and right halo loads at CTA edges. Both halo paths join before the CTA barrier.
+
+**Techniques at this step.** [Cooperative shared-memory tiling with halo ownership](#technique-p20-shared-tile).
+
+**Source.** [`lib/StencilSharedCache.cpp:179`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/lib/StencilSharedCache.cpp#L179). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-reuse-center-write"></a>
+
+##### 5. Reuse center and write result
+
+**Component.** StencilSharedCachePass::run. After the barrier, the replacement starts the sum from the already loaded center SSA value, loads each other tile position, accumulates with i32 adds, stores the output, and returns.
+
+**Techniques at this step.** [Center SSA reuse across the tile reads](#technique-p20-center-ssa-reuse).
+
+**Source.** [`lib/StencilSharedCache.cpp:229`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/lib/StencilSharedCache.cpp#L229). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-verify-write-output"></a>
+
+##### 6. Verify and write transformed IR
+
+**Component.** tools/SharedMemoryMain.cpp main. The CLI runs the pass manager, verifies the resulting module, and exits 4 if verification fails. It then opens the requested output and prints the module; an open error exits 5.
+
+**Techniques at this step.** [LLVM IR verification and NVPTX lowering checks](#technique-p20-ir-nvptx-validation).
+
+**Source.** [`tools/SharedMemoryMain.cpp:41`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/SharedMemoryMain.cpp#L41). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-cpu-legality-nvptx-checks"></a>
+
+##### 7. Check legality, verifier, and NVPTX
+
+**Component.** tools/check-stencil.py main. The verification script builds positive, commuted, and negative fixture variants for all four radii, runs LLVM verification, invokes the optimizer, and checks transformed structure or byte-for-byte normalized unchanged output. Accepted variants also lower original and optimized IR to PTX and check shared-memory instructions and the barrier.
+
+**Techniques at this step.** [LLVM IR verification and NVPTX lowering checks](#technique-p20-ir-nvptx-validation) · [Scalar address, index, and flag legality checks](#technique-p20-scalar-index-legality).
+
+**Source.** [`tools/check-stencil.py:64`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/check-stencil.py#L64). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-cuda-oracle-compare"></a>
+
+##### 8. Compare GPU results with CPU oracle
+
+**Component.** tools/CudaRunner.cpp main. The runner loads original and transformed PTX modules, selects the named fixed mode, and runs both kernels against modulo-u32 CPU sums. Smoke and correctness paths report failures on mismatched output; selfTest checks wrapping arithmetic and fixture construction.
+
+**Techniques at this step.** [Independent modulo-i32 CPU oracle comparison](#technique-p20-cpu-oracle).
+
+**Source.** [`tools/CudaRunner.cpp:27`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/CudaRunner.cpp#L27) · [`tools/CudaRunner.cpp:132`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/CudaRunner.cpp#L132). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-measure-batch-transaction"></a>
+
+##### 9. Measure two timing scopes
+
+**Component.** CudaRunner::measure and transaction. Benchmark mode warms each variant, then alternates seven rounds of 64 launches on resident arrays timed by CUDA events. It separately times a warm-context transaction with allocation, copies, poison, one launch, synchronization, readback, and frees; each output is oracle-checked.
+
+**Techniques at this step.** [Separate resident launch batches from warm transactions](#technique-p20-timing-scopes).
+
+**Source.** [`tools/CudaRunner.cpp:114`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/CudaRunner.cpp#L114) · [`tools/CudaRunner.cpp:149`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/CudaRunner.cpp#L149). [Back to execution flow](#execution-flow).
+
+<a id="flow-step-summarize-evidence"></a>
+
+##### 10. Summarize timing evidence
+
+**Component.** tools/summarize-stencils.py main. The summarizer validates seven distinct alternating samples for each mode, size, and side, rejects failed or incomplete records, and writes medians, ranges, comparisons, scope labels, and source hashes. The evidence report says the measured data does not establish a general speedup.
+
+**Techniques at this step.** [Separate resident launch batches from warm transactions](#technique-p20-timing-scopes).
+
+**Source.** [`tools/summarize-stencils.py:14`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/tools/summarize-stencils.py#L14) · [`docs/evidence/p20/stencil-radius-20261024/README.md:15`](https://github.com/STEVVVU/gpu-shared-memory-optimizer/blob/main/docs/evidence/p20/stencil-radius-20261024/README.md#L15). [Back to execution flow](#execution-flow).
+
+<details>
+<summary>Scope and subsystem coverage</summary>
+
+The optimizer CLI parses and verifies LLVM IR, runs private shared-slot promotion before the stencil pass, verifies and writes the result. Separate verification paths check unchanged/re-written IR and NVPTX lowering, CUDA compares original and transformed PTX with a CPU oracle, and benchmark scripts report resident launch batches and warm application transactions separately.
+
+- **Stencil matcher and rewrite.** The exact contract and scalar legality gate the tiled rewrite, including conditional halo ownership, synchronization, and center SSA reuse. [Step 3](#flow-step-match-stencil-contract), [Step 4](#flow-step-build-tile-halo), [Step 5](#flow-step-reuse-center-write).
+- **Private shared-slot rewrite.** The driver runs this conservative promotion before stencil matching; unsupported shared slots remain unchanged. [Step 2](#flow-step-promote-private-slot).
+- **LLVM IR driver and NVPTX validation.** The CLI checks IR before and after passes; the separate fixture workflow checks NVPTX lowering and transformed instruction patterns. [Step 1](#flow-step-parse-verify-input), [Step 6](#flow-step-verify-write-output), [Step 7](#flow-step-cpu-legality-nvptx-checks).
+- **CUDA correctness oracle.** Native original and transformed kernels are checked against an independent modulo-u32 CPU sum oracle. [Step 8](#flow-step-cuda-oracle-compare).
+- **Timing measurement and evidence.** CUDA event batches and warm allocation/copy/launch transactions have separate timers and parsed reports. [Step 9](#flow-step-measure-batch-transaction), [Step 10](#flow-step-summarize-evidence).
+
+Outside this flow audit:
+
+- `inherited llvm-tutor tools, examples, and tests outside the active P20 driver`. They are not called by the active transformations or maintained P20 verification path.
+- `CUDA kernel implementation outside test fixtures`. The optimizer transforms LLVM IR; the active project path does not add an independent CUDA kernel implementation.
+
+</details>
+
+<!-- execution-flow:end -->
+
+<details>
+<summary>Subsystem technique index</summary>
+
 ### Subsystem map
 
 Select a subsystem in the diagram to open its techniques, tradeoffs, and code references. The numbered links provide the same navigation. This map groups components; the execution diagrams show their runtime flow.
@@ -43,6 +291,8 @@ flowchart LR
 5. [Timing measurement and evidence](#subsystem-timing-measurement-and-evidence)
 
 The project adds two conservative [LLVM IR passes](#llvm-ir-pass) to the inherited `llvm-tutor` codebase. LLVM provides parsing, verification, pass management, and NVPTX lowering. The additions recognize a fixed padded stencil sum and one lane-private shared slot; unsupported IR remains unchanged. GPU profiling is unavailable, so the timing evidence does not identify a hardware bottleneck.
+
+</details>
 
 <details>
 <summary>Expand flow diagram 1</summary>
