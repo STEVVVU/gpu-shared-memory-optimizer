@@ -7,12 +7,163 @@ This project adds two bounded LLVM 23 module transformations to the full-history
 `PrivateSharedSlotPromotionPass` removes one same-lane store/load pair for a `[128 x i32]` address-space-3 slot in an exact 128-thread single-block kernel. It verifies the GEP type matches the slot global and preserves CTA barriers. It rejects cross-thread accesses and unsupported uses.
 
 ## Contents
+- [Implementation techniques](#implementation-techniques)
 
 - [Architecture and execution guide](#architecture-and-execution-guide)
 - [Build and verify](#build-and-verify)
 - [Contracts and evidence](#contracts-and-evidence)
 - [Implementation record](reports/P20-implementation.md)
 - [Verification driver](.agents/skills/verify-gpu-shared-memory-optimizer/SKILL.md)
+
+## Implementation techniques
+
+This section covers the active P20 IR passes and the verification and measurement paths that exercise them. It excludes the inherited `llvm-tutor` examples outside those paths. The rationale is inferred from current code.
+
+| Subsystem | Technique cards | Code |
+| --- | --- | --- |
+| Stencil matching and rewrite | [contract matching](#technique-p20-exact-match); [scalar address and index legality](#technique-p20-scalar-index-legality); [cooperative tile and halo ownership](#technique-p20-shared-tile); [center SSA reuse](#technique-p20-center-ssa-reuse) | [`StencilSharedCache.cpp`](lib/StencilSharedCache.cpp), [`StencilSharedCache.h`](include/StencilSharedCache.h) |
+| Private shared-slot rewrite | [lane-private promotion with alias and effect checks](#technique-p20-private-promotion) | [`PrivateSharedSlotPromotion.cpp`](lib/PrivateSharedSlotPromotion.cpp), [`PrivateSharedSlotPromotion.h`](include/PrivateSharedSlotPromotion.h) |
+| IR driver and NVPTX validation | [verify IR before and after transformation, then lower for NVPTX](#technique-p20-ir-nvptx-validation) | [`SharedMemoryMain.cpp`](tools/SharedMemoryMain.cpp), [`verify.ps1`](tools/verify.ps1), [`check-stencil.py`](tools/check-stencil.py) |
+| CUDA correctness | [compare GPU results with the modulo-`i32` CPU oracle](#technique-p20-cpu-oracle) | [`CudaRunner.cpp`](tools/CudaRunner.cpp) |
+| Timing and evidence | [separate resident launch batches from warm transactions](#technique-p20-timing-scopes) | [`CudaRunner.cpp`](tools/CudaRunner.cpp), [`benchmark-stencils.ps1`](tools/benchmark-stencils.ps1), [`summarize-stencils.py`](tools/summarize-stencils.py) |
+
+<a id="technique-p20-exact-match"></a>
+
+<details>
+<summary>Contract-gated exact IR matching</summary>
+
+**Mechanism.** The stencil pass first maps one of four exact contract strings to radius 1, 4, 8 or 16. It then checks a single-block PTX kernel, the 128-thread launch requirement, pointer address spaces and attributes, output index construction, aligned non-atomic `i32` loads, one exact offset per tap, and a matching sum tree. A failed check leaves the function unchanged.
+
+**Example.** Radius 4 requires nine distinct input offsets from -4 through +4, all rooted at the output's `block*128+lane` index.
+
+**Why here.** The rewrite's indexing and halo assumptions are safe only for a narrow recognized shape.
+
+**Tradeoffs.** Equivalent IR written in another shape is rejected. Broadening the matcher requires proving and checking each new form.
+
+**Code and ownership.** [`contractRadius`](lib/StencilSharedCache.cpp#L17) maps the four strings. [`isSupported`](lib/StencilSharedCache.cpp#L68) checks the kernel contract. This pass is a project extension.
+
+</details>
+
+<a id="technique-p20-shared-tile"></a>
+
+<details>
+<summary>Cooperative shared-memory tiling with halo loads</summary>
+
+**Mechanism.** The rewrite allocates a shared tile of `128 + 2R` integers. Each lane loads its center into `lane + R`; lanes below `R` load left halo values, and lanes at or above `128 - R` load right halo values. A CTA barrier follows the loads. Each lane sums neighboring tile entries, reusing its center SSA value, then stores its output.
+
+**Example.** Radius 4 creates 136 slots for 128 centers and eight halo values.
+
+**Why here.** The exact stencil reads adjacent input values that neighboring lanes have already loaded into the cooperative tile.
+
+**Tradeoffs.** The pass adds branches, shared storage and a CTA barrier. The caller must provide padded input, full 128-thread CTAs and a length divisible by 128; the pass adds no tail masks.
+
+The lane ranges are disjoint: every lane writes one center, lanes below `R` write the left halo, and lanes at or above `128-R` write the right halo. All paths reach the barrier before neighbor reads.
+
+**Code and ownership.** [`StencilSharedCachePass::run`](lib/StencilSharedCache.cpp#L179), including tile ownership and the CTA barrier at [`L255`](lib/StencilSharedCache.cpp#L255); project extension.
+
+</details>
+
+<a id="technique-p20-private-promotion"></a>
+
+<details>
+<summary>Promotion of a proven lane-private shared slot</summary>
+
+**Mechanism.** The pass recognizes a 128-element shared `i32` array indexed by the current lane, with exactly one store and one later load in a single-block 128-thread kernel. The global must have one matching array GEP, and that GEP must have only the store and load as users. The pass checks the GEP type, lane index, store-before-load order, and intervening memory effects. It rejects atomics, volatile accesses, writes and non-barrier calls. When checks pass, it replaces the load with the stored SSA value and removes the store and slot address.
+
+**Example.** `shared[tid] = value; ... result = shared[tid]` can become `result = value` if no intervening memory effect can change the slot.
+
+**Why here.** The transformation removes a redundant same-thread memory round trip when the IR proves the location is private to that lane.
+
+**Tradeoffs.** The effect scan is conservative. Aliasing patterns and multi-block control flow are not promoted; CTA barriers are preserved.
+
+**Code and ownership.** [`isLaneId`](lib/PrivateSharedSlotPromotion.cpp#L12) and [`PrivateSharedSlotPromotionPass::run`](lib/PrivateSharedSlotPromotion.cpp#L38); project extension.
+
+</details>
+
+<a id="technique-p20-scalar-index-legality"></a>
+
+<details>
+<summary>Scalar address, index, and flag legality checks</summary>
+
+**Mechanism.** The stencil matcher anchors the output GEP at `zext i32(block*128+tid.x) to i64`. It accepts only one-index scalar `i32` GEPs, aligned non-atomic and nonvolatile loads and stores, and unflagged arithmetic. Each input address must be the base index or one unflagged `i64` add or subtract by an expected offset. The pass checks that each offset occurs once and that every load feeds the sum exactly once.
+
+**Example.** For radius 4, the source addresses must cover `base-4` through `base+4`; computing a negative halo offset in `i32` before extending it to `i64` is rejected.
+
+**Why here.** These checks keep indexing and modulo-`i32` behavior within the shape the rewrite constructs.
+
+**Tradeoffs.** Equivalent address expressions outside the checked forms remain unchanged. The CPU legality checker exercises flagged arithmetic, byte GEPs, weak alignment, duplicate offsets, extra loads, and offsets built before the extension.
+
+**Code and ownership.** [`isIndexOffset`](lib/StencilSharedCache.cpp#L41), [`isSupported`](lib/StencilSharedCache.cpp#L125), and [`variants`](tools/check-stencil.py#L17); project extension.
+
+</details>
+
+<a id="technique-p20-center-ssa-reuse"></a>
+
+<details>
+<summary>Center SSA reuse across the tile reads</summary>
+
+**Mechanism.** The generated kernel keeps the value returned by the center global load in an SSA value, stores that value into the tile, and starts the sum with the same SSA value after the CTA barrier. It loads only the nonzero-offset neighbors from shared memory. For the legacy radius-1 fixture, the verifier checks two shared neighbor loads per output path rather than reloading the center. The radius-aware checker expects 2R neighbor loads for radius R.
+
+**Example.** `center = load input[base]`; `store tile[lane + R], center`; after the barrier, `sum = center` before adding tile neighbors.
+
+**Why here.** The source stencil already loads the center from global memory, so the rewrite can use that value for the output sum.
+
+**Tradeoffs.** This removes a redundant shared read in the generated form but does not establish a timing win for the complete tile transformation. The retained value and its live range are specific to this rewrite.
+
+**Code and ownership.** [`StencilSharedCachePass::run`](lib/StencilSharedCache.cpp#L229) creates the center value and [`StencilSharedCachePass::run`](lib/StencilSharedCache.cpp#L256) uses it after the barrier. [`verify.ps1`](tools/verify.ps1#L141) checks shared-load count. Project extension.
+
+</details>
+
+<a id="technique-p20-ir-nvptx-validation"></a>
+
+<details>
+<summary>LLVM IR verification and NVPTX lowering checks</summary>
+
+**Mechanism.** The CLI parses input LLVM IR, verifies the module, runs private-slot promotion before stencil rewriting, verifies the result, and writes it. The maintained verifier checks both original and transformed modules, lowers both with LLVM `llc` for `nvptx64` and `sm_120`, then checks the PTX memory instructions and barrier against the expected transform shape. The CPU-only checker also verifies that rejected cases remain unchanged after canonicalization.
+
+**Example.** `shared-memory-opt input.ll -o output.ll` must produce verifier-valid IR; `llc -march=nvptx64 -mcpu=sm_120 output.ll` must emit PTX before native GPU validation can run.
+
+**Why here.** LLVM verification catches malformed IR, and target lowering checks that the changed address spaces and barrier are accepted by the project’s pinned backend.
+
+**Tradeoffs.** LLVM and NVPTX checks establish IR validity and code-generation compatibility, not GPU execution correctness or performance.
+
+**Code and ownership.** [`main`](tools/SharedMemoryMain.cpp#L25), the verifier's IR/PTX checks in [`verify.ps1`](tools/verify.ps1#L121), and [`main`](tools/check-stencil.py#L64). The pass and validation driver are project extensions; LLVM verifier and NVPTX lowering are inherited dependencies.
+
+</details>
+
+<a id="technique-p20-cpu-oracle"></a>
+
+<details>
+<summary>Independent modulo-i32 CPU oracle comparison</summary>
+
+**Mechanism.** The CUDA runner computes each expected output on the CPU by summing the `2R+1` input words in `uint32_t`, which gives the same modulo-`2^32` result as the unflagged LLVM `i32` sum. It runs original and transformed PTX on the same generated data, poisons output buffers before correctness launches, and compares each result with the CPU vector. Patterns include ordinary values, deterministic full-bit values, and distinct halo values with wraparound.
+
+**Example.** For radius 1, `0xffffffff + 2 + 0x80000000` wraps to `0x80000001`; the runner self-checks this case.
+
+**Why here.** The oracle checks semantics independently of the optimizer and compares both kernel versions, including halo and overflow cases.
+
+**Tradeoffs.** It checks the finite launch sizes and patterns chosen by the runner. It does not prove correctness for arbitrary IR, geometry, or input allocation.
+
+**Code and ownership.** [`oracle`](tools/CudaRunner.cpp#L27), [`selfTest`](tools/CudaRunner.cpp#L60), and [`runCase`](tools/CudaRunner.cpp#L132); project extension.
+
+</details>
+
+<a id="technique-p20-timing-scopes"></a>
+
+<details>
+<summary>Separate resident launch batches from warm transactions</summary>
+
+**Mechanism.** The runner reports CUDA-event time for 64 launches that reuse device arrays. Separately, it times a warm-context transaction that allocates input and output, copies input to the device, poisons output, launches once, synchronizes, copies output back, and frees the buffers. Seven alternating original/transformed rounds reduce side-order bias; each timed output is checked against the CPU oracle. Context setup and module loading sit outside the transaction timer.
+
+**Example.** The event sample describes repeated work on resident arrays. The transaction sample includes allocation and host-device transfers for one launch.
+
+**Why here.** Reporting both scopes exposes whether a resident launch result also appears in the documented application transaction.
+
+**Tradeoffs.** Event batches can include host-submission gaps; transaction timing still excludes context setup, module loading, JIT and oracle work. The observed samples do not identify a hardware bottleneck or establish a general performance gain. Profiling evidence remains unavailable.
+
+**Code and ownership.** [`measure`](tools/CudaRunner.cpp#L114), [`transaction`](tools/CudaRunner.cpp#L149), the campaign's [`Prepare` manifest](tools/benchmark-stencils.ps1#L17), and [`parse`](tools/summarize-stencils.py#L14); project extension.
+
+</details>
 
 ## Architecture and execution guide
 
